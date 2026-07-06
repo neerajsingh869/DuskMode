@@ -46,6 +46,13 @@ final class OverlayEngine {
 
     /// Turn the overlay on with the given warmth/dim, or off entirely.
     /// Warmth is 0 whenever GammaEngine is carrying the colour layer.
+    ///
+    /// REGRESSION GUARD (see REGRESSIONS.md #1): this is called every 30 s by the
+    /// circadian schedule, so it must be idempotent at the window-server level.
+    /// Re-ordering an already-visible overlay is what causes the one-frame ⌘Tab
+    /// flash — order front only on first show, and only touch the colour when it
+    /// actually changed. The window stays alive (possibly fully transparent) while
+    /// enabled, so ramps crossing dim=0 never create/destroy windows mid-session.
     func apply(enabled: Bool, warmth: Double, dim: Double) {
         lastWarmth = warmth
         lastDim = dim
@@ -53,13 +60,10 @@ final class OverlayEngine {
         guard enabled else { teardown(); return }
         let color = Self.overlayColor(warmth: CGFloat(warmth), dim: CGFloat(dim),
                                       maxTintAlpha: maxTintAlpha, maxDimAlpha: maxDimAlpha)
-        // Nothing to draw (e.g. gamma handles colour and dim is 0) — keep no window
-        // around at all rather than an invisible one.
-        guard color.alphaComponent > 0.001 else { teardown(); return }
         if windows.isEmpty { buildWindows() }
         for w in windows {
             w.setOverlayColor(color)
-            w.orderFrontRegardless()
+            if !w.isVisible { w.orderFrontRegardless() }
         }
     }
 
@@ -165,7 +169,11 @@ private final class OverlayWindow: NSWindow {
         setFrame(screen.frame, display: true)
     }
 
+    private var currentColor: NSColor?
+
     func setOverlayColor(_ color: NSColor) {
+        guard color != currentColor else { return }   // skip no-op invalidations
+        currentColor = color
         backgroundColor = color
     }
 
