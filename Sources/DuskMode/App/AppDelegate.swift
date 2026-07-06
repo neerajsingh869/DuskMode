@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let popover = NSPopover()
 
     let overlayEngine = OverlayEngine()
+    let gammaEngine = GammaEngine()
     let grayscaleEngine = GrayscaleEngine()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -54,8 +55,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func preferencesChanged() {
         let prefs = PreferencesStore.shared
+        // Gamma multiplies pixels (true warm light — blacks stay black, f.lux-quality),
+        // so it carries the colour layer whenever it works; the overlay then only
+        // carries sub-hardware dimming. If gamma is unavailable (newest-Apple-Silicon
+        // regression), the overlay carries both, with the same blackbody hue.
+        let gammaHandlesColor = gammaEngine.apply(enabled: prefs.masterEnabled,
+                                                  warmth: prefs.warmth)
         overlayEngine.apply(enabled: prefs.masterEnabled,
-                            warmth: prefs.warmth,
+                            warmth: gammaHandlesColor ? 0 : prefs.warmth,
                             dim: prefs.dim)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Leave the screen exactly as macOS expects: gamma restored, colour back on.
+        gammaEngine.shutdown()
+        grayscaleEngine.shutdown()
     }
 }

@@ -19,6 +19,8 @@ final class OverlayEngine {
 
     private var windows: [OverlayWindow] = []
     private var active = false
+    private var lastWarmth = 0.0
+    private var lastDim = 0.0
 
     init() {
         let nc = NotificationCenter.default
@@ -30,24 +32,30 @@ final class OverlayEngine {
         // Reassert after the machine wakes — overlays can be dropped across sleep.
         wsnc.addObserver(self, selector: #selector(reassert),
                          name: NSWorkspace.didWakeNotification, object: nil)
-        // Kill the flash when switching Spaces or full-screen apps: the overlay already
-        // lives on all Spaces, but on transition it can briefly fall behind. Re-order it
-        // to the front the instant the active Space or frontmost app changes.
+        // Re-front only on Space transitions (which are animated, so a reorder is
+        // invisible). NOTE: there was previously a didActivateApplication observer
+        // doing the same on every ⌘Tab — that reorder itself caused a split-second
+        // overlay dropout, so it must not come back. collectionBehavior already
+        // keeps the window on all Spaces and above everything at .screenSaver level.
         wsnc.addObserver(self, selector: #selector(reorderFront),
                          name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
-        wsnc.addObserver(self, selector: #selector(reorderFront),
-                         name: NSWorkspace.didActivateApplicationNotification, object: nil)
     }
 
     // MARK: - Public control
 
     /// Turn the overlay on with the given warmth/dim, or off entirely.
+    /// Warmth is 0 whenever GammaEngine is carrying the colour layer.
     func apply(enabled: Bool, warmth: Double, dim: Double) {
+        lastWarmth = warmth
+        lastDim = dim
         active = enabled
         guard enabled else { teardown(); return }
-        if windows.isEmpty { buildWindows() }
         let color = Self.overlayColor(warmth: CGFloat(warmth), dim: CGFloat(dim),
                                       maxTintAlpha: maxTintAlpha, maxDimAlpha: maxDimAlpha)
+        // Nothing to draw (e.g. gamma handles colour and dim is 0) — keep no window
+        // around at all rather than an invisible one.
+        guard color.alphaComponent > 0.001 else { teardown(); return }
+        if windows.isEmpty { buildWindows() }
         for w in windows {
             w.setOverlayColor(color)
             w.orderFrontRegardless()
@@ -76,9 +84,9 @@ final class OverlayEngine {
     @objc private func rebuild() {
         guard active else { return }
         buildWindows()
-        apply(enabled: true,
-              warmth: PreferencesStore.shared.warmth,
-              dim: PreferencesStore.shared.dim)
+        // Use the values from the last apply(), NOT PreferencesStore: when gamma is
+        // handling colour, the applied warmth is 0 even though prefs.warmth isn't.
+        apply(enabled: true, warmth: lastWarmth, dim: lastDim)
     }
 
     @objc private func reassert() {
@@ -91,8 +99,14 @@ final class OverlayEngine {
 
     // MARK: - Colour maths
 
-    /// Collapse an amber→red tint (alpha a1) composited over a black dim (alpha a2)
-    /// into a single equivalent RGBA, so we only need one overlay window per screen.
+    /// Collapse a warm tint (alpha a1) composited over a black dim (alpha a2) into a
+    /// single equivalent RGBA, so we only need one overlay window per screen.
+    ///
+    /// The tint targets the same blackbody multiplier the gamma engine would apply at
+    /// this warmth. Source-over compositing can't truly multiply, so we pick the
+    /// alpha + colour pair that reproduces the multiplier exactly on white content
+    /// (a1 = 1 - min(multiplier); tint = (multiplier - (1-a1)) / a1), capped at
+    /// maxTintAlpha so dark content isn't washed out.
     ///
     /// Compositing tint over background B then black over that yields:
     ///   result = (B*(1-a1) + tint*a1) * (1-a2)
@@ -104,14 +118,16 @@ final class OverlayEngine {
         let w = clamp01(warmth)
         let d = clamp01(dim)
 
-        // Tint hue: amber at low warmth → deep red at high warmth.
-        let amber = (r: CGFloat(1.0), g: CGFloat(0.60), b: CGFloat(0.25))
-        let deepRed = (r: CGFloat(1.0), g: CGFloat(0.15), b: CGFloat(0.05))
-        let tint = (r: lerp(amber.r, deepRed.r, w),
-                    g: lerp(amber.g, deepRed.g, w),
-                    b: lerp(amber.b, deepRed.b, w))
+        let m = ColorTemperature.multiplier(forWarmth: Double(w))
+        let aNeeded = 1 - CGFloat(min(m.g, m.b))
+        let a1 = w > 0.001 ? min(aNeeded, maxTintAlpha) : 0
+        var tint = (r: CGFloat(0), g: CGFloat(0), b: CGFloat(0))
+        if a1 > 0.0001 {
+            tint.r = clamp01((CGFloat(m.r) - (1 - a1)) / a1)
+            tint.g = clamp01((CGFloat(m.g) - (1 - a1)) / a1)
+            tint.b = clamp01((CGFloat(m.b) - (1 - a1)) / a1)
+        }
 
-        let a1 = w * maxTintAlpha           // strength of the colour wash
         let a2 = d * maxDimAlpha            // strength of the darkening
         let a = 1 - (1 - a1) * (1 - a2)     // combined alpha
 
@@ -126,7 +142,6 @@ final class OverlayEngine {
     }
 
     private static func clamp01(_ v: CGFloat) -> CGFloat { min(1, max(0, v)) }
-    private static func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
 }
 
 /// A single borderless, click-through overlay covering one screen.

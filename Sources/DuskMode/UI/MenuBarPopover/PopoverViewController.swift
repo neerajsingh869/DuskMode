@@ -3,17 +3,29 @@ import AppKit
 /// The menu-bar popover: master switch, warmth + dim sliders, grayscale toggle.
 /// Built programmatically (no .xib) so the whole app stays plain-text and buildable
 /// without Xcode's Interface Builder.
+///
+/// Layout follows macOS control-panel conventions (Wi-Fi/Bluetooth menu extras):
+/// one title row with the master switch, labelled sliders with live value readouts
+/// (Kelvin, like f.lux, so the numbers are meaningful), switches instead of buttons
+/// for on/off state, and controls that visibly disable when the master is off.
 final class PopoverViewController: NSViewController {
 
     private let overlayEngine: OverlayEngine
     private let grayscaleEngine: GrayscaleEngine
     private let prefs = PreferencesStore.shared
 
+    private static let contentWidth: CGFloat = 300
+    private static let insets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
+
     private let masterSwitch = NSSwitch()
     private let warmthSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private let dimSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
-    private let grayscaleButton = NSButton(title: "", target: nil, action: nil)
-    private let statusLabel = NSTextField(labelWithString: "")
+    private let grayscaleSwitch = NSSwitch()
+
+    private let warmthTitle = NSTextField(labelWithString: "Warmth")
+    private let warmthValue = NSTextField(labelWithString: "")
+    private let dimTitle = NSTextField(labelWithString: "Dimming")
+    private let dimValue = NSTextField(labelWithString: "")
 
     init(overlayEngine: OverlayEngine, grayscaleEngine: GrayscaleEngine) {
         self.overlayEngine = overlayEngine
@@ -24,78 +36,100 @@ final class PopoverViewController: NSViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
     override func loadView() {
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 300))
+        let root = NSView()
 
+        // Header: app name + master switch on one row, tagline beneath.
         let title = NSTextField(labelWithString: "DuskMode")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
+        masterSwitch.target = self
+        masterSwitch.action = #selector(masterChanged)
+        let headerRow = row(leading: title, trailing: masterSwitch)
 
-        let subtitle = NSTextField(labelWithString: "Scientifically-backed wind-down")
+        let subtitle = NSTextField(labelWithString: "Science-based evening wind-down")
         subtitle.font = .systemFont(ofSize: 11)
         subtitle.textColor = .secondaryLabelColor
 
-        // Master row
-        let masterLabel = NSTextField(labelWithString: "DuskMode")
-        masterSwitch.target = self
-        masterSwitch.action = #selector(masterChanged)
-        let masterRow = NSStackView(views: [masterLabel, NSView(), masterSwitch])
-        masterRow.orientation = .horizontal
-        masterRow.distribution = .fill
-
-        // Warmth
-        let warmthLabel = NSTextField(labelWithString: "Warmth  (amber → red)")
-        warmthLabel.font = .systemFont(ofSize: 11)
-        warmthLabel.textColor = .secondaryLabelColor
+        // Warmth: label + live Kelvin readout, slider beneath.
+        styleSliderTitle(warmthTitle)
+        styleValueLabel(warmthValue)
         warmthSlider.target = self
         warmthSlider.action = #selector(warmthChanged)
         warmthSlider.isContinuous = true
+        warmthSlider.toolTip = "Colour temperature: 6500 K (neutral) to 1900 K (candlelight)"
 
-        // Dim
-        let dimLabel = NSTextField(labelWithString: "Dim  (below hardware minimum)")
-        dimLabel.font = .systemFont(ofSize: 11)
-        dimLabel.textColor = .secondaryLabelColor
+        // Dimming: label + live percentage, slider beneath.
+        styleSliderTitle(dimTitle)
+        styleValueLabel(dimValue)
         dimSlider.target = self
         dimSlider.action = #selector(dimChanged)
         dimSlider.isContinuous = true
+        dimSlider.toolTip = "Darkens the screen below the hardware brightness minimum"
 
-        // Grayscale
-        grayscaleButton.bezelStyle = .rounded
-        grayscaleButton.target = self
-        grayscaleButton.action = #selector(grayscaleTapped)
+        // Grayscale: switch row + explanatory caption.
+        let grayscaleTitle = NSTextField(labelWithString: "Grayscale")
+        grayscaleTitle.font = .systemFont(ofSize: 13)
+        grayscaleSwitch.target = self
+        grayscaleSwitch.action = #selector(grayscaleChanged)
+        let grayscaleRow = row(leading: grayscaleTitle, trailing: grayscaleSwitch)
 
-        statusLabel.font = .systemFont(ofSize: 10)
-        statusLabel.textColor = .tertiaryLabelColor
-        statusLabel.maximumNumberOfLines = 2
-        statusLabel.lineBreakMode = .byWordWrapping
+        let grayscaleCaption = NSTextField(wrappingLabelWithString:
+            "Turns the whole screen black-and-white to make endless scrolling less gripping.")
+        grayscaleCaption.font = .systemFont(ofSize: 11)
+        grayscaleCaption.textColor = .secondaryLabelColor
+        grayscaleCaption.preferredMaxLayoutWidth = Self.contentWidth
+        grayscaleCaption.isSelectable = false
+
+        let topSeparator = separator()
+        let bottomSeparator = separator()
+        let warmthRow = row(leading: warmthTitle, trailing: warmthValue)
+        let dimRow = row(leading: dimTitle, trailing: dimValue)
 
         let stack = NSStackView(views: [
-            title, subtitle,
-            separator(),
-            masterRow,
-            warmthLabel, warmthSlider,
-            dimLabel, dimSlider,
-            separator(),
-            grayscaleButton,
-            statusLabel
+            headerRow,
+            subtitle,
+            topSeparator,
+            warmthRow,
+            warmthSlider,
+            dimRow,
+            dimSlider,
+            bottomSeparator,
+            grayscaleRow,
+            grayscaleCaption
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
-        stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        stack.edgeInsets = Self.insets
         stack.translatesAutoresizingMaskIntoConstraints = false
+
+        // Breathing room around the sections; tight pairing of label ↔ slider.
+        stack.setCustomSpacing(2, after: headerRow)
+        stack.setCustomSpacing(12, after: subtitle)
+        stack.setCustomSpacing(12, after: topSeparator)
+        stack.setCustomSpacing(4, after: warmthRow)
+        stack.setCustomSpacing(14, after: warmthSlider)
+        stack.setCustomSpacing(4, after: dimRow)
+        stack.setCustomSpacing(12, after: dimSlider)
+        stack.setCustomSpacing(12, after: bottomSeparator)
+        stack.setCustomSpacing(6, after: grayscaleRow)
 
         root.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             stack.topAnchor.constraint(equalTo: root.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+            stack.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            root.widthAnchor.constraint(
+                equalToConstant: Self.contentWidth + Self.insets.left + Self.insets.right)
         ])
-        // Make the sliders span the popover width.
-        warmthSlider.widthAnchor.constraint(equalToConstant: 268).isActive = true
-        dimSlider.widthAnchor.constraint(equalToConstant: 268).isActive = true
-        grayscaleButton.widthAnchor.constraint(equalToConstant: 268).isActive = true
+        for wide in [warmthSlider, dimSlider] as [NSView] {
+            wide.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        }
+        grayscaleCaption.widthAnchor.constraint(
+            lessThanOrEqualToConstant: Self.contentWidth).isActive = true
 
         self.view = root
+        preferredContentSize = root.fittingSize
     }
 
     override func viewWillAppear() {
@@ -109,16 +143,22 @@ final class PopoverViewController: NSViewController {
         masterSwitch.state = prefs.masterEnabled ? .on : .off
         warmthSlider.doubleValue = prefs.warmth
         dimSlider.doubleValue = prefs.dim
-        updateGrayscaleButton()
+        grayscaleSwitch.state = grayscaleEngine.isGrayscaleEnabled() ? .on : .off
+        updateValueLabels()
+        updateEnabledStates()
     }
 
-    private func updateGrayscaleButton() {
-        let on = grayscaleEngine.isGrayscaleEnabled()
-        grayscaleButton.title = on ? "Grayscale: On" : "Grayscale: Off"
-        if grayscaleEngine.isSupported {
-            statusLabel.stringValue = "Grayscale drops colour to interrupt compulsive scrolling. One tap — no setup needed."
-        } else {
-            statusLabel.stringValue = "Grayscale is unavailable on this macOS build; using the Color Filters fallback."
+    private func updateValueLabels() {
+        let kelvin = ColorTemperature.kelvin(forWarmth: warmthSlider.doubleValue)
+        warmthValue.stringValue = "\(Int((kelvin / 100).rounded()) * 100) K"
+        dimValue.stringValue = "\(Int((dimSlider.doubleValue * 100).rounded()))%"
+    }
+
+    private func updateEnabledStates() {
+        let on = prefs.masterEnabled
+        for control in [warmthSlider, dimSlider] { control.isEnabled = on }
+        for label in [warmthTitle, warmthValue, dimTitle, dimValue] {
+            label.alphaValue = on ? 1.0 : 0.4
         }
     }
 
@@ -126,28 +166,49 @@ final class PopoverViewController: NSViewController {
 
     @objc private func masterChanged() {
         prefs.masterEnabled = (masterSwitch.state == .on)
+        updateEnabledStates()
     }
 
     @objc private func warmthChanged() {
         prefs.warmth = warmthSlider.doubleValue
+        updateValueLabels()
     }
 
     @objc private func dimChanged() {
         prefs.dim = dimSlider.doubleValue
+        updateValueLabels()
     }
 
-    @objc private func grayscaleTapped() {
-        grayscaleEngine.toggle()
-        updateGrayscaleButton()
+    @objc private func grayscaleChanged() {
+        grayscaleEngine.setGrayscale(grayscaleSwitch.state == .on)
     }
 
     // MARK: - Helpers
+
+    private func row(leading: NSView, trailing: NSView) -> NSStackView {
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let row = NSStackView(views: [leading, spacer, trailing])
+        row.orientation = .horizontal
+        row.distribution = .fill
+        row.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        return row
+    }
+
+    private func styleSliderTitle(_ label: NSTextField) {
+        label.font = .systemFont(ofSize: 13)
+    }
+
+    private func styleValueLabel(_ label: NSTextField) {
+        label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        label.textColor = .secondaryLabelColor
+    }
 
     private func separator() -> NSView {
         let line = NSBox()
         line.boxType = .separator
         line.translatesAutoresizingMaskIntoConstraints = false
-        line.widthAnchor.constraint(equalToConstant: 268).isActive = true
+        line.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         return line
     }
 }

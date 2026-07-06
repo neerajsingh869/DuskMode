@@ -20,10 +20,11 @@ final class PreferencesStore {
     }
 
     private init() {
-        // Sensible first-launch defaults: off, mild warmth, no dimming.
+        // Sensible first-launch defaults: off, ~3500 K warmth (f.lux's sunset zone —
+        // warm enough to feel on first try, not the deep-red end), no dimming.
         defaults.register(defaults: [
             Key.masterEnabled: false,
-            Key.warmth: 0.35,
+            Key.warmth: 0.65,
             Key.dim: 0.0,
             Key.grayscaleOn: false
         ])
