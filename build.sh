@@ -1,12 +1,19 @@
 #!/bin/bash
 # Build DuskMode.app from the Swift package — no Xcode required, just Command Line Tools.
-# Usage: ./build.sh [debug|release]   (default: release)
+# Usage: ./build.sh [debug|release] [run]
+#   debug|release  build config (default: release)
+#   run            quit any running copy and relaunch the fresh build when done
 set -euo pipefail
 
 CONFIG="${1:-release}"
+DO_RUN="${2:-}"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 APP="$ROOT/DuskMode.app"
 BUNDLE_ID="app.duskmode"
+
+# Always quit any running copy first — a previously-opened build keeps living in the
+# menu bar and would otherwise stack up as duplicate moon icons.
+pkill -f "DuskMode.app/Contents/MacOS/DuskMode" 2>/dev/null && echo "==> Quit running DuskMode" || true
 
 echo "==> Compiling ($CONFIG)…"
 swift build -c "$CONFIG"
@@ -49,4 +56,11 @@ codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || \
   echo "   (ad-hoc codesign skipped — not fatal for local runs)"
 
 echo "==> Done: $APP"
-echo "    Run with:  open \"$APP\"    (or)    \"$APP/Contents/MacOS/DuskMode\""
+
+if [[ "$DO_RUN" == "run" || "$DO_RUN" == "open" ]]; then
+  echo "==> Launching…"
+  open "$APP"
+else
+  echo "    Run with:  ./build.sh release run    (builds + relaunches)"
+  echo "    Or:        open \"$APP\""
+fi
