@@ -73,7 +73,7 @@ final class PopoverViewController: NSViewController {
         let grayscaleRow = row(leading: grayscaleTitle, trailing: grayscaleSwitch)
 
         let grayscaleCaption = NSTextField(wrappingLabelWithString:
-            "Turns the whole screen black-and-white to make endless scrolling less gripping.")
+            "Turns the whole screen black-and-white to make endless scrolling less gripping. macOS briefly shows its Colour Filters confirmation.")
         grayscaleCaption.font = .systemFont(ofSize: 11)
         grayscaleCaption.textColor = .secondaryLabelColor
         grayscaleCaption.preferredMaxLayoutWidth = Self.contentWidth

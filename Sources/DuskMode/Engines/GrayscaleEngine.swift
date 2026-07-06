@@ -1,31 +1,40 @@
 import AppKit
 import ApplicationServices
+import notify
 
 /// Layer 2 (dopamine/compulsion interruption): system-wide grayscale, one tap, no setup.
 ///
-/// Primary method: `CGDisplayForceToGray` / `CGDisplayUsesForceToGray` — the
-/// WindowServer's own force-to-gray switch (the one loginwindow uses). Instant, needs
-/// no Accessibility permission, and crucially it does NOT route through the
-/// Color Filters accessibility feature, so macOS shows no "Colour Filters On/Off"
-/// HUD bezel. (The previous UAGrayscaleSetEnabled method triggered that bezel on
-/// every toggle — bad UX.) Private symbols, so they're quarantined here and loaded
-/// with dlsym; both verified present on macOS 15.7.3.
+/// Primary method: `UAGrayscaleSetEnabled` / `UAGrayscaleIsEnabled` (UniversalAccess,
+/// private, dlsym-loaded) — the switch the Accessibility settings pane itself uses.
+/// Instant, no Accessibility permission, nothing manual for the user.
 ///
-/// Fallback 1: `UAGrayscaleSetEnabled` (UniversalAccess) — works, but flashes the
-/// system bezel. Fallback 2: synthesise the Color Filters shortcut (⌥⌘F5) via public
-/// CGEvent. The app degrades gracefully, it never crashes.
+/// THE BEZEL IS UNAVOIDABLE — do not try to remove it again. macOS shows its
+/// "Colour Filters On/Off" HUD on every toggle because AccessibilityVisualsAgent
+/// watches the preference store itself, not any notification we could skip.
+/// Exhaustively verified live on macOS 15.7.3 (2026-07-06): CGDisplayForceToGray
+/// sets its flag but no longer renders; SkyLight's SLSAddWindowFilter whitelist
+/// rejects every desaturation CIFilter (only CIColorInvert is allowed); gamma
+/// tables can't mix channels; and writing the MediaAccessibility pref without
+/// notify_post still triggers the bezel. Neeraj accepted the bezel (2026-07-06).
+///
+/// Fallback 1: write the MediaAccessibility pref directly + notify (same effect,
+/// used only if the UA symbols ever disappear). Fallback 2: synthesise the Color
+/// Filters shortcut (⌥⌘F5) via public CGEvent. Degrades, never crashes.
 final class GrayscaleEngine {
 
     private typealias SetBoolFn = @convention(c) (Bool) -> Void
     private typealias GetBoolFn = @convention(c) () -> Bool
+    private typealias MASetFn = @convention(c) (Int64, Bool) -> Void
+    private typealias MAGetFn = @convention(c) (Int64) -> Int64
 
-    // Primary: CoreGraphics force-to-gray (no HUD).
-    private var cgSetGray: SetBoolFn?
-    private var cgGetGray: GetBoolFn?
-
-    // Fallback 1: UniversalAccess (shows the system bezel).
+    // Primary: UniversalAccess.
     private var uaSetGray: SetBoolFn?
     private var uaGetGray: GetBoolFn?
+
+    // Fallback 1: MediaAccessibility display-filter pref (category 1 = Color Filters).
+    private var maSetEnabled: MASetFn?
+    private var maGetEnabled: MAGetFn?
+    private let maColorFilterCategory: Int64 = 1
 
     /// F5 keycode, for the last-resort CGEvent fallback only.
     private let kVK_F5: CGKeyCode = 0x60
@@ -34,22 +43,23 @@ final class GrayscaleEngine {
         loadSymbols()
     }
 
-    /// True when a silent, instant, no-permission method is available.
-    var isSupported: Bool { cgSetGray != nil || uaSetGray != nil }
+    /// True when an instant, no-permission method is available.
+    var isSupported: Bool { uaSetGray != nil || maSetEnabled != nil }
 
     /// Best-effort read of the current system grayscale state.
     func isGrayscaleEnabled() -> Bool {
-        if let read = cgGetGray { return read() }
         if let read = uaGetGray { return read() }
+        if let read = maGetEnabled { return read(maColorFilterCategory) != 0 }
         return PreferencesStore.shared.grayscaleOn
     }
 
     /// Turn grayscale on or off.
     func setGrayscale(_ enabled: Bool) {
-        if let write = cgSetGray {
+        if let write = uaSetGray {
             write(enabled)
-        } else if let write = uaSetGray {
-            write(enabled)
+        } else if let write = maSetEnabled {
+            write(maColorFilterCategory, enabled)
+            notify_post("com.apple.mediaaccessibility.displayFilterSettingsChanged")
         } else {
             postColorFilterShortcut()
         }
@@ -64,25 +74,17 @@ final class GrayscaleEngine {
         return newState
     }
 
-    /// Force-to-gray isn't visible in any Settings pane, so if the app quits while
-    /// it's on the user would have no way to turn it off. Always leave colour on.
+    /// The app's effects end with the app: colour comes back on quit, matching the
+    /// gamma and overlay layers (which the OS reverts automatically).
     func shutdown() {
-        if let write = cgSetGray, let read = cgGetGray, read() {
-            write(false)
+        if isGrayscaleEnabled() {
+            setGrayscale(false)
         }
     }
 
     // MARK: - Private symbol loading
 
     private func loadSymbols() {
-        if let cg = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_NOW) {
-            if let sym = dlsym(cg, "CGDisplayForceToGray") {
-                cgSetGray = unsafeBitCast(sym, to: SetBoolFn.self)
-            }
-            if let sym = dlsym(cg, "CGDisplayUsesForceToGray") {
-                cgGetGray = unsafeBitCast(sym, to: GetBoolFn.self)
-            }
-        }
         let uaPath = "/System/Library/PrivateFrameworks/UniversalAccess.framework/UniversalAccess"
         if let ua = dlopen(uaPath, RTLD_NOW) {
             if let sym = dlsym(ua, "UAGrayscaleSetEnabled") {
@@ -90,6 +92,15 @@ final class GrayscaleEngine {
             }
             if let sym = dlsym(ua, "UAGrayscaleIsEnabled") {
                 uaGetGray = unsafeBitCast(sym, to: GetBoolFn.self)
+            }
+        }
+        let maPath = "/System/Library/Frameworks/MediaAccessibility.framework/MediaAccessibility"
+        if let ma = dlopen(maPath, RTLD_NOW) {
+            if let sym = dlsym(ma, "MADisplayFilterPrefSetCategoryEnabled") {
+                maSetEnabled = unsafeBitCast(sym, to: MASetFn.self)
+            }
+            if let sym = dlsym(ma, "MADisplayFilterPrefGetCategoryEnabled") {
+                maGetEnabled = unsafeBitCast(sym, to: MAGetFn.self)
             }
         }
         // Intentionally keep both handles open for the process lifetime.
