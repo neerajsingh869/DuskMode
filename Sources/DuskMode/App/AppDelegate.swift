@@ -81,23 +81,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The Phase-1 manual path: master switch + sliders.
     private func applyManual(_ prefs: PreferencesStore) {
-        // Gamma multiplies pixels (true warm light — blacks stay black, f.lux-quality),
-        // so it carries the colour layer whenever it works; the overlay then only
-        // carries sub-hardware dimming. If gamma is unavailable (newest-Apple-Silicon
-        // regression), the overlay carries both, with the same blackbody hue.
-        let gammaHandlesColor = gammaEngine.apply(enabled: prefs.masterEnabled,
-                                                  warmth: prefs.warmth)
-        overlayEngine.apply(enabled: prefs.masterEnabled,
-                            warmth: gammaHandlesColor ? 0 : prefs.warmth,
+        // Gamma carries BOTH colour and dim whenever it works: it isn't a window, so
+        // it can never flash during app switches (REGRESSIONS.md #9). Only when gamma
+        // is unavailable (newest-Apple-Silicon regression) does the overlay window
+        // exist at all, carrying both layers with the same blackbody hue.
+        let gammaHandlesFilters = gammaEngine.apply(enabled: prefs.masterEnabled,
+                                                    warmth: prefs.warmth,
+                                                    dim: prefs.dim)
+        overlayEngine.apply(enabled: prefs.masterEnabled && !gammaHandlesFilters,
+                            warmth: prefs.warmth,
                             dim: prefs.dim)
     }
 
     /// The Phase-2 automatic path: same engines, values from the timeline.
     private func applyScheduleTarget(_ target: CircadianTimeline.Target) {
-        let gammaHandlesColor = gammaEngine.apply(enabled: target.active,
-                                                  warmth: target.warmth)
-        overlayEngine.apply(enabled: target.active,
-                            warmth: gammaHandlesColor ? 0 : target.warmth,
+        let gammaHandlesFilters = gammaEngine.apply(enabled: target.active,
+                                                    warmth: target.warmth,
+                                                    dim: target.dim)
+        overlayEngine.apply(enabled: target.active && !gammaHandlesFilters,
+                            warmth: target.warmth,
                             dim: target.dim)
         if scheduledGrayscale != target.grayscale {
             if grayscaleEngine.isGrayscaleEnabled() != target.grayscale {

@@ -79,6 +79,24 @@
   straight to the engines via `applyScheduleTarget`. Writing prefs from the
   schedule would re-trigger `preferencesChanged` in a loop.
 
+## 9. Brightness flash on app switch whenever dim > 0
+- **Symptom:** with any dimming active, switching apps briefly shows full
+  brightness; the dim "catches up" a few ms later. (Warmth never flashed —
+  that was the clue.)
+- **Root cause:** dim was an overlay `NSWindow`, and windows participate in
+  app-switch compositing, so the dim layer can lag a frame. Gamma isn't a
+  window and physically cannot flash. Entry #1's fix removed *our* churn but
+  couldn't remove the window itself.
+- **Fix (2026-07-06 ~20:00):** dim folded into GammaEngine — all three channel
+  maxima scaled by `1 − dim×0.92` (mathematically identical to the black
+  overlay). On working-gamma hardware NO overlay window exists at all.
+- **Invariant:** on hardware where gamma works, BOTH colour and dim ride gamma;
+  the overlay window exists only when `GammaEngine.isAvailable == false`.
+  Never reintroduce a window-based layer on working-gamma hardware. Dim scale
+  is floored at 8% output (`maxDimScale = 0.92`) so the screen stays usable.
+- **Re-check:** master on, dim 50% → gamma readback maxima ≈ 0.54×multipliers
+  AND zero DuskMode windows at layer 1000 in `CGWindowListCopyWindowInfo`.
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)

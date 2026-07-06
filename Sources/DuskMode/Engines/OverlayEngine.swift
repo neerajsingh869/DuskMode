@@ -1,12 +1,13 @@
 import AppKit
 import DuskModeCore
 
-/// Layer 1 (color/melatonin) + Layer 3 (dimming/cortisol) in one engine.
+/// Layer 1 (color/melatonin) + Layer 3 (dimming/cortisol) — FALLBACK path only.
 ///
-/// This is the app's unbreakable foundation. Instead of the gamma-table API
-/// (public but currently broken on newest Apple Silicon, and it fights Night Shift),
-/// we lay a transparent, click-through NSWindow over every screen and bake a single
-/// tint+dim colour into it. Plain AppKit, unchanged for ~20 years.
+/// GammaEngine carries both colour and dim on working hardware, because gamma isn't
+/// a window and therefore can never flash during app/Space switches (REGRESSIONS.md
+/// #1/#9). This engine only engages when the gamma API is broken (newest Apple
+/// Silicon): a transparent, click-through NSWindow over every screen with a single
+/// tint+dim colour baked in. Plain AppKit, unchanged for ~20 years.
 ///
 /// Warmth pushes the tint from amber toward deep red (blue+green suppression, red-shift).
 /// Dim adds darkening beyond the hardware brightness floor (~6 lux halves melatonin — see

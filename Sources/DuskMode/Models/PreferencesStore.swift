@@ -23,18 +23,36 @@ final class PreferencesStore {
         static let cachedLongitude = "cachedLongitude"
     }
 
+    /// First-launch values — also what the popover's "Reset to Defaults" restores.
+    /// ~3500 K warmth (f.lux's sunset zone — warm enough to feel on first try, not
+    /// the deep-red end), no dimming, grayscale off, bedtime 23:00.
+    enum Default {
+        static let warmth = 0.65
+        static let dim = 0.0
+        static let bedtimeMinutes = 23 * 60
+    }
+
     private init() {
-        // Sensible first-launch defaults: off, ~3500 K warmth (f.lux's sunset zone —
-        // warm enough to feel on first try, not the deep-red end), no dimming.
-        // Schedule off until the user opts in; bedtime 23:00.
+        // Master and schedule start off until the user opts in.
         defaults.register(defaults: [
             Key.masterEnabled: false,
-            Key.warmth: 0.65,
-            Key.dim: 0.0,
+            Key.warmth: Default.warmth,
+            Key.dim: Default.dim,
             Key.grayscaleOn: false,
             Key.scheduleEnabled: false,
-            Key.bedtimeMinutes: 23 * 60
+            Key.bedtimeMinutes: Default.bedtimeMinutes
         ])
+    }
+
+    /// Restore the tunable values (warmth, dim, grayscale, bedtime) to first-launch
+    /// defaults. Mode switches (master, schedule) are deliberately untouched — reset
+    /// puts the knobs back, it doesn't turn the app on or off.
+    func resetToDefaults() {
+        defaults.set(Default.warmth, forKey: Key.warmth)
+        defaults.set(Default.dim, forKey: Key.dim)
+        defaults.set(false, forKey: Key.grayscaleOn)
+        defaults.set(Default.bedtimeMinutes, forKey: Key.bedtimeMinutes)
+        notify()
     }
 
     /// Master on/off for the whole filtering stack.

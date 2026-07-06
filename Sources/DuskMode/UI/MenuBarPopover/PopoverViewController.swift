@@ -116,9 +116,20 @@ final class PopoverViewController: NSViewController {
         grayscaleCaption.preferredMaxLayoutWidth = Self.contentWidth
         grayscaleCaption.isSelectable = false
 
+        // Reset: one click back to first-launch values (warmth 3500 K, no dimming,
+        // grayscale off, bedtime 23:00). Master/schedule switches stay as they are.
+        let resetButton = NSButton(title: "Reset to Defaults",
+                                   target: self, action: #selector(resetTapped))
+        resetButton.bezelStyle = .rounded
+        resetButton.controlSize = .small
+        resetButton.font = .systemFont(ofSize: 11)
+        resetButton.toolTip =
+            "Back to the original settings: 3500 K, no dimming, grayscale off, bedtime 23:00. On/off switches are left alone."
+
         let separator1 = separator()
         let separator2 = separator()
         let separator3 = separator()
+        let separator4 = separator()
         let warmthRow = row(leading: warmthTitle, trailing: warmthValue)
         let dimRow = row(leading: dimTitle, trailing: dimValue)
 
@@ -136,7 +147,9 @@ final class PopoverViewController: NSViewController {
             dimSlider,
             separator3,
             grayscaleRow,
-            grayscaleCaption
+            grayscaleCaption,
+            separator4,
+            resetButton
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -158,6 +171,8 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(12, after: dimSlider)
         stack.setCustomSpacing(12, after: separator3)
         stack.setCustomSpacing(6, after: grayscaleRow)
+        stack.setCustomSpacing(12, after: grayscaleCaption)
+        stack.setCustomSpacing(10, after: separator4)
 
         root.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -298,6 +313,16 @@ final class PopoverViewController: NSViewController {
         // momentary choice, and the schedule only re-asserts grayscale at the next
         // phase boundary (edge-triggered in AppDelegate).
         grayscaleEngine.setGrayscale(grayscaleSwitch.state == .on)
+    }
+
+    @objc private func resetTapped() {
+        // Turn system grayscale off first if it's on (edge-triggered — no bezel when
+        // it was already off), then restore the pref knobs and refresh the whole UI.
+        if grayscaleEngine.isGrayscaleEnabled() {
+            grayscaleEngine.setGrayscale(false)
+        }
+        prefs.resetToDefaults()
+        syncFromState()
     }
 
     /// Dragging a slider while the schedule runs = switch to manual, keeping the
