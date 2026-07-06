@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "NightFlow",
+    name: "DuskMode",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "NightFlow",
-            path: "Sources/NightFlow"
+            name: "DuskMode",
+            path: "Sources/DuskMode"
         )
     ],
     swiftLanguageVersions: [.v5]

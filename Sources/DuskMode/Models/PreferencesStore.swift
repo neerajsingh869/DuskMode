@@ -10,7 +10,7 @@ final class PreferencesStore {
     private let defaults = UserDefaults.standard
 
     /// Posted whenever any value changes so engines can react.
-    static let didChange = Notification.Name("NightFlow.PreferencesDidChange")
+    static let didChange = Notification.Name("DuskMode.PreferencesDidChange")
 
     private enum Key {
         static let masterEnabled = "masterEnabled"

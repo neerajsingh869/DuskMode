@@ -1,4 +1,4 @@
-# NightFlow — Research Notes (Phase 0)
+# DuskMode — Research Notes (Phase 0)
 
 These are the implementation-relevant numbers pulled from the studies in `citations.json`.
 When a later phase asks "what value should this preset be?", the answer comes from here.
@@ -13,7 +13,7 @@ Three independent mechanisms delay sleep, and each needs its own layer:
 2. **Intensity (brightness) suppression + alerting** — melatonin is suppressed at very low lux; brightness independently raises alertness/cortisol. → *Dimming overlay layer.*
 3. **Behavioral reward (compulsion)** — color makes screens more rewarding; grayscale interrupts the loop. → *Grayscale layer.*
 
-An app that only warms color (Night Shift, basic f.lux) addresses ~1/3 of the problem. NightFlow's pitch is stacking all three on an automated timeline.
+An app that only warms color (Night Shift, basic f.lux) addresses ~1/3 of the problem. DuskMode's pitch is stacking all three on an automated timeline.
 
 ---
 
@@ -60,7 +60,7 @@ An app that only warms color (Night Shift, basic f.lux) addresses ~1/3 of the pr
 - Show the `effectStrength` label for each topic (strong / moderate / emerging).
 - Blue light & timing & brightness = strong. Green = moderate (note the decay-over-time nuance). Red = moderate. Grayscale = emerging.
 - Never imply grayscale has the same evidence weight as blue-light suppression. Overselling weak evidence is the exact failure mode that would kill credibility.
-- **Include the `limitations` topic (counter-evidence) prominently.** The 2023 Cochrane review found blue-light *filtering glasses* don't clearly help. Our defense/positioning: those glasses block only a weak slice of blue and don't dim — NightFlow reduces the actual melanopic *dose* (dimming + heavy spectral shift + correct timing), which is what the stronger evidence (Brown 2022, Nagare 2019, Cajochen 2022) supports. Say this openly; it builds trust and is factually our edge.
+- **Include the `limitations` topic (counter-evidence) prominently.** The 2023 Cochrane review found blue-light *filtering glasses* don't clearly help. Our defense/positioning: those glasses block only a weak slice of blue and don't dim — DuskMode reduces the actual melanopic *dose* (dimming + heavy spectral shift + correct timing), which is what the stronger evidence (Brown 2022, Nagare 2019, Cajochen 2022) supports. Say this openly; it builds trust and is factually our edge.
 
 ## Recency check (done 2026-07-06)
 Verified the 2020-2026 literature, not just the foundational papers. Key modern additions:

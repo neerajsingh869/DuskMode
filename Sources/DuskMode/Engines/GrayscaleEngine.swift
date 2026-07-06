@@ -9,7 +9,7 @@ import ApplicationServices
 /// "Color Filters" toggle by synthesising its default keyboard shortcut (⌥⌘F5)
 /// with the public CGEvent API. Apple maintains the grayscale itself; we just flip it.
 ///
-/// Requirement: the user must (a) grant Accessibility permission to NightFlow, and
+/// Requirement: the user must (a) grant Accessibility permission to DuskMode, and
 /// (b) have Color Filters set to Grayscale in System Settings. Onboarding (Phase 4)
 /// will walk them through both. Until then this fails gracefully.
 final class GrayscaleEngine {
@@ -17,7 +17,7 @@ final class GrayscaleEngine {
     /// Virtual keycode for F5. The system default Color Filters shortcut is ⌥⌘F5.
     private let kVK_F5: CGKeyCode = 0x60
 
-    /// True if NightFlow is trusted for Accessibility (needed to post system shortcuts).
+    /// True if DuskMode is trusted for Accessibility (needed to post system shortcuts).
     var hasAccessibilityPermission: Bool {
         AXIsProcessTrusted()
     }

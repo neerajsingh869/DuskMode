@@ -26,7 +26,7 @@ final class PopoverViewController: NSViewController {
     override func loadView() {
         let root = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 300))
 
-        let title = NSTextField(labelWithString: "NightFlow")
+        let title = NSTextField(labelWithString: "DuskMode")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
 
         let subtitle = NSTextField(labelWithString: "Scientifically-backed wind-down")
@@ -117,7 +117,7 @@ final class PopoverViewController: NSViewController {
         if grayscaleEngine.hasAccessibilityPermission {
             statusLabel.stringValue = "Grayscale uses macOS Color Filters (⌥⌘F5). Set it to Grayscale in System Settings if it doesn't change."
         } else {
-            statusLabel.stringValue = "Grant Accessibility permission so NightFlow can toggle grayscale."
+            statusLabel.stringValue = "Grant Accessibility permission so DuskMode can toggle grayscale."
         }
     }
 

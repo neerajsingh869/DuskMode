@@ -1,6 +1,6 @@
 {
   "meta": {
-    "purpose": "Master research database for NightFlow. Every feature must trace to a citation here. This file is read directly by the in-app 'The Science' tab (ResearchView).",
+    "purpose": "Master research database for DuskMode. Every feature must trace to a citation here. This file is read directly by the in-app 'The Science' tab (ResearchView).",
     "lastUpdated": "2026-07-06",
     "note": "Effect-strength field is an honest label so the app never oversells weak evidence. Values: 'strong' (multiple RCTs/action-spectrum data), 'moderate' (replicated but limited), 'emerging' (single or small studies). Recency verified across 2020-2026 literature on 2026-07-06 — added Brown 2022 melanopic-EDI consensus, Nagare 2019 & Cajochen 2022 (brightness>color), and a 'limitations' counter-evidence topic (Cochrane 2023, Frontiers 2025)."
   },
@@ -91,7 +91,7 @@
     {
       "id": "brightness",
       "title": "Overall Brightness (Lux) & Alertness",
-      "summary": "Beyond color, sheer intensity matters — and recent (2019-2022) work shows it matters MORE than color. Melatonin is suppressed at surprisingly low levels (~6 lux can halve it), bright light acutely raises alertness/cortisol, and warming color WITHOUT dimming is largely ineffective. This is the strongest justification for NightFlow's whole design.",
+      "summary": "Beyond color, sheer intensity matters — and recent (2019-2022) work shows it matters MORE than color. Melatonin is suppressed at surprisingly low levels (~6 lux can halve it), bright light acutely raises alertness/cortisol, and warming color WITHOUT dimming is largely ineffective. This is the strongest justification for DuskMode's whole design.",
       "implementationImpact": "The dimming overlay is not a nice-to-have — it is the highest-leverage layer. Every timeline phase MUST pair a color target with a real brightness reduction; a warm/red screen left bright still delays sleep. Modern target: aim the deep phases toward <=10 lux melanopic EDI (evening) trending to <=1 lux (bedtime) per Brown 2022.",
       "effectStrength": "strong",
       "citations": [
@@ -116,7 +116,7 @@
           "authors": "Nagare R, Plitnick B, Figueiro MG (Lighting Research Center)",
           "journal": "Lighting Research & Technology",
           "year": 2019,
-          "keyFinding": "Warming screen color alone (Night Shift) did NOT meaningfully reduce melatonin suppression unless brightness was also lowered. Direct evidence that color-only apps are incomplete and that dimming is essential — the core rationale for NightFlow over f.lux/Night Shift.",
+          "keyFinding": "Warming screen color alone (Night Shift) did NOT meaningfully reduce melatonin suppression unless brightness was also lowered. Direct evidence that color-only apps are incomplete and that dimming is essential — the core rationale for DuskMode over f.lux/Night Shift.",
           "link": "https://pubmed.ncbi.nlm.nih.gov/31191118/"
         },
         {
@@ -132,8 +132,8 @@
     {
       "id": "limitations",
       "title": "Limitations & Counter-Evidence (Honesty Section)",
-      "summary": "What the science does NOT firmly support. Shown in-app to prove NightFlow is honest, not hype. The strongest recent challenge: blue-light-FILTERING glasses show little proven benefit — but note the crucial distinction from what this app actually does.",
-      "implementationImpact": "Copy must never claim 'blue-light glasses science'. NightFlow's mechanism is REDUCING the melanopic light dose reaching the eye (dimming + heavy spectral shift + correct timing), which is better supported than the weak-filter-glasses approach the Cochrane review critiques. The Science tab should surface this section prominently.",
+      "summary": "What the science does NOT firmly support. Shown in-app to prove DuskMode is honest, not hype. The strongest recent challenge: blue-light-FILTERING glasses show little proven benefit — but note the crucial distinction from what this app actually does.",
+      "implementationImpact": "Copy must never claim 'blue-light glasses science'. DuskMode's mechanism is REDUCING the melanopic light dose reaching the eye (dimming + heavy spectral shift + correct timing), which is better supported than the weak-filter-glasses approach the Cochrane review critiques. The Science tab should surface this section prominently.",
       "effectStrength": "moderate",
       "citations": [
         {
@@ -141,7 +141,7 @@
           "authors": "Singh S, Downie LE, Anderson AJ, et al. (Cochrane Review)",
           "journal": "Cochrane Database of Systematic Reviews",
           "year": 2023,
-          "keyFinding": "17 RCTs, 619 participants: blue-light-FILTERING glasses showed no clear benefit for eye strain or sleep. Important caveat: these lenses block only a modest slice of blue and do NOT dim or heavily shift spectrum — unlike NightFlow's approach. Cited for honesty and to sharpen our positioning.",
+          "keyFinding": "17 RCTs, 619 participants: blue-light-FILTERING glasses showed no clear benefit for eye strain or sleep. Important caveat: these lenses block only a modest slice of blue and do NOT dim or heavily shift spectrum — unlike DuskMode's approach. Cited for honesty and to sharpen our positioning.",
           "link": "https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD013244.pub2/full"
         },
         {
