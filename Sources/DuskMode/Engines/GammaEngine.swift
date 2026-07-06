@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import DuskModeCore
 
 /// Layer 1, primary path: colour temperature via display gamma tables — the same
 /// public API f.lux itself uses (`CGSetDisplayTransferByFormula`). Gamma *multiplies*

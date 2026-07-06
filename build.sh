@@ -46,6 +46,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSUIElement</key>             <true/>
     <key>NSAccessibilityUsageDescription</key>
     <string>DuskMode needs Accessibility access to toggle macOS grayscale (Color Filters) on your wind-down schedule.</string>
+    <key>NSLocationUsageDescription</key>
+    <string>DuskMode uses your approximate location once to compute local sunset and sunrise times for the automatic wind-down schedule. It never leaves your Mac.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>DuskMode uses your approximate location once to compute local sunset and sunrise times for the automatic wind-down schedule. It never leaves your Mac.</string>
 </dict>
 </plist>
 PLIST

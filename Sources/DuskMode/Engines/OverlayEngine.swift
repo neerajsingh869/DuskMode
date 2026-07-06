@@ -1,4 +1,5 @@
 import AppKit
+import DuskModeCore
 
 /// Layer 1 (color/melatonin) + Layer 3 (dimming/cortisol) in one engine.
 ///

@@ -9,18 +9,25 @@ import Foundation
 /// This is what makes the tint read as warm *orange* light rather than a red film:
 /// at 3400 K the green channel keeps ~77% — hardcoded amber/red hues cut green far
 /// too hard, which was why the old tint looked reddish next to f.lux.
-enum ColorTemperature {
+public enum ColorTemperature {
 
-    static let neutralKelvin: Double = 6500
-    static let minKelvin: Double = 1900
+    public static let neutralKelvin: Double = 6500
+    public static let minKelvin: Double = 1900
 
-    static func kelvin(forWarmth warmth: Double) -> Double {
+    public static func kelvin(forWarmth warmth: Double) -> Double {
         let w = min(1, max(0, warmth))
         return neutralKelvin - w * (neutralKelvin - minKelvin)
     }
 
+    /// Inverse of `kelvin(forWarmth:)` — lets the circadian timeline express its
+    /// presets in Kelvin (the unit the research uses) and drive the warmth engines.
+    public static func warmth(forKelvin kelvin: Double) -> Double {
+        let k = min(neutralKelvin, max(minKelvin, kelvin))
+        return (neutralKelvin - k) / (neutralKelvin - minKelvin)
+    }
+
     /// Per-channel multiplier (each 0…1; red is always 1) for a colour temperature.
-    static func multiplier(forKelvin kelvin: Double) -> (r: Double, g: Double, b: Double) {
+    public static func multiplier(forKelvin kelvin: Double) -> (r: Double, g: Double, b: Double) {
         let raw = blackbody(kelvin)
         let ref = blackbody(neutralKelvin)
         return (min(1, raw.r / ref.r),
@@ -28,7 +35,7 @@ enum ColorTemperature {
                 min(1, raw.b / ref.b))
     }
 
-    static func multiplier(forWarmth warmth: Double) -> (r: Double, g: Double, b: Double) {
+    public static func multiplier(forWarmth warmth: Double) -> (r: Double, g: Double, b: Double) {
         multiplier(forKelvin: kelvin(forWarmth: warmth))
     }
 

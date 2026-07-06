@@ -17,16 +17,23 @@ final class PreferencesStore {
         static let warmth = "warmth"
         static let dim = "dim"
         static let grayscaleOn = "grayscaleOn"
+        static let scheduleEnabled = "scheduleEnabled"
+        static let bedtimeMinutes = "bedtimeMinutes"
+        static let cachedLatitude = "cachedLatitude"
+        static let cachedLongitude = "cachedLongitude"
     }
 
     private init() {
         // Sensible first-launch defaults: off, ~3500 K warmth (f.lux's sunset zone —
         // warm enough to feel on first try, not the deep-red end), no dimming.
+        // Schedule off until the user opts in; bedtime 23:00.
         defaults.register(defaults: [
             Key.masterEnabled: false,
             Key.warmth: 0.65,
             Key.dim: 0.0,
-            Key.grayscaleOn: false
+            Key.grayscaleOn: false,
+            Key.scheduleEnabled: false,
+            Key.bedtimeMinutes: 23 * 60
         ])
     }
 
@@ -52,6 +59,32 @@ final class PreferencesStore {
     var grayscaleOn: Bool {
         get { defaults.bool(forKey: Key.grayscaleOn) }
         set { defaults.set(newValue, forKey: Key.grayscaleOn); notify() }
+    }
+
+    /// Whether the automatic circadian schedule is driving the filters.
+    /// While true, manual warmth/dim/master values are ignored (schedule wins);
+    /// any manual adjustment in the UI flips this back to false.
+    var scheduleEnabled: Bool {
+        get { defaults.bool(forKey: Key.scheduleEnabled) }
+        set { defaults.set(newValue, forKey: Key.scheduleEnabled); notify() }
+    }
+
+    /// Target bedtime as minutes after midnight (0…1439). Values before noon are
+    /// treated as "after midnight" (e.g. 30 = 00:30 the next morning).
+    var bedtimeMinutes: Int {
+        get { min(1439, max(0, defaults.integer(forKey: Key.bedtimeMinutes))) }
+        set { defaults.set(min(1439, max(0, newValue)), forKey: Key.bedtimeMinutes); notify() }
+    }
+
+    /// Last CoreLocation fix, so sunset stays accurate across launches even if
+    /// location access later fails. Nil until the first successful fix.
+    var cachedLatitude: Double? { defaults.object(forKey: Key.cachedLatitude) as? Double }
+    var cachedLongitude: Double? { defaults.object(forKey: Key.cachedLongitude) as? Double }
+
+    func setCachedLocation(latitude: Double, longitude: Double) {
+        defaults.set(latitude, forKey: Key.cachedLatitude)
+        defaults.set(longitude, forKey: Key.cachedLongitude)
+        notify()
     }
 
     private func clamp(_ v: Double) -> Double { min(1.0, max(0.0, v)) }

@@ -1,4 +1,5 @@
 import AppKit
+import DuskModeCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -8,11 +9,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let overlayEngine = OverlayEngine()
     let gammaEngine = GammaEngine()
     let grayscaleEngine = GrayscaleEngine()
+    let circadianEngine = CircadianEngine()
+
+    /// Last grayscale state the *schedule* asked for. Grayscale is only touched when
+    /// this changes (edge-triggered): the macOS Colour Filters bezel would otherwise
+    /// fire every 30s tick, and a manual grayscale toggle mid-phase would be fought.
+    private var scheduledGrayscale: Bool?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupPopover()
 
+        circadianEngine.onTarget = { [weak self] target in
+            self?.applyScheduleTarget(target)
+        }
         NotificationCenter.default.addObserver(
             self, selector: #selector(preferencesChanged),
             name: PreferencesStore.didChange, object: nil)
@@ -38,7 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.contentViewController = PopoverViewController(
             overlayEngine: overlayEngine,
-            grayscaleEngine: grayscaleEngine)
+            grayscaleEngine: grayscaleEngine,
+            circadianEngine: circadianEngine)
     }
 
     @objc private func togglePopover() {
@@ -55,6 +66,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func preferencesChanged() {
         let prefs = PreferencesStore.shared
+        if prefs.scheduleEnabled {
+            // The circadian schedule owns the screen: (re)start it and let its
+            // target flow through applyScheduleTarget. Manual values are ignored.
+            circadianEngine.setEnabled(true)
+        } else {
+            if circadianEngine.isEnabled {
+                circadianEngine.setEnabled(false)
+                scheduledGrayscale = nil   // schedule no longer owns grayscale
+            }
+            applyManual(prefs)
+        }
+    }
+
+    /// The Phase-1 manual path: master switch + sliders.
+    private func applyManual(_ prefs: PreferencesStore) {
         // Gamma multiplies pixels (true warm light — blacks stay black, f.lux-quality),
         // so it carries the colour layer whenever it works; the overlay then only
         // carries sub-hardware dimming. If gamma is unavailable (newest-Apple-Silicon
@@ -64,6 +90,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayEngine.apply(enabled: prefs.masterEnabled,
                             warmth: gammaHandlesColor ? 0 : prefs.warmth,
                             dim: prefs.dim)
+    }
+
+    /// The Phase-2 automatic path: same engines, values from the timeline.
+    private func applyScheduleTarget(_ target: CircadianTimeline.Target) {
+        let gammaHandlesColor = gammaEngine.apply(enabled: target.active,
+                                                  warmth: target.warmth)
+        overlayEngine.apply(enabled: target.active,
+                            warmth: gammaHandlesColor ? 0 : target.warmth,
+                            dim: target.dim)
+        if scheduledGrayscale != target.grayscale {
+            if grayscaleEngine.isGrayscaleEnabled() != target.grayscale {
+                grayscaleEngine.setGrayscale(target.grayscale)
+            }
+            scheduledGrayscale = target.grayscale
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
