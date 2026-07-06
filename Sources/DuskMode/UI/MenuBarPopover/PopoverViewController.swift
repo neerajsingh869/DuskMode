@@ -34,7 +34,7 @@ final class PopoverViewController: NSViewController {
         subtitle.textColor = .secondaryLabelColor
 
         // Master row
-        let masterLabel = NSTextField(labelWithString: "Night mode")
+        let masterLabel = NSTextField(labelWithString: "DuskMode")
         masterSwitch.target = self
         masterSwitch.action = #selector(masterChanged)
         let masterRow = NSStackView(views: [masterLabel, NSView(), masterSwitch])
@@ -113,11 +113,12 @@ final class PopoverViewController: NSViewController {
     }
 
     private func updateGrayscaleButton() {
-        grayscaleButton.title = prefs.grayscaleOn ? "Grayscale: On" : "Toggle Grayscale"
-        if grayscaleEngine.hasAccessibilityPermission {
-            statusLabel.stringValue = "Grayscale uses macOS Color Filters (⌥⌘F5). Set it to Grayscale in System Settings if it doesn't change."
+        let on = grayscaleEngine.isGrayscaleEnabled()
+        grayscaleButton.title = on ? "Grayscale: On" : "Grayscale: Off"
+        if grayscaleEngine.isSupported {
+            statusLabel.stringValue = "Grayscale drops colour to interrupt compulsive scrolling. One tap — no setup needed."
         } else {
-            statusLabel.stringValue = "Grant Accessibility permission so DuskMode can toggle grayscale."
+            statusLabel.stringValue = "Grayscale is unavailable on this macOS build; using the Color Filters fallback."
         }
     }
 
@@ -136,14 +137,8 @@ final class PopoverViewController: NSViewController {
     }
 
     @objc private func grayscaleTapped() {
-        if grayscaleEngine.toggle() {
-            updateGrayscaleButton()
-        } else {
-            // No permission yet: prompt, and open the relevant settings pane.
-            grayscaleEngine.requestAccessibilityPermission()
-            grayscaleEngine.openColorFilterSettings()
-            updateGrayscaleButton()
-        }
+        grayscaleEngine.toggle()
+        updateGrayscaleButton()
     }
 
     // MARK: - Helpers

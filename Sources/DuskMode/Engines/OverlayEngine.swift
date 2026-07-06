@@ -25,10 +25,18 @@ final class OverlayEngine {
         // Rebuild overlays when displays are connected/disconnected/rearranged.
         nc.addObserver(self, selector: #selector(rebuild),
                        name: NSApplication.didChangeScreenParametersNotification, object: nil)
+
+        let wsnc = NSWorkspace.shared.notificationCenter
         // Reassert after the machine wakes — overlays can be dropped across sleep.
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self, selector: #selector(reassert),
-            name: NSWorkspace.didWakeNotification, object: nil)
+        wsnc.addObserver(self, selector: #selector(reassert),
+                         name: NSWorkspace.didWakeNotification, object: nil)
+        // Kill the flash when switching Spaces or full-screen apps: the overlay already
+        // lives on all Spaces, but on transition it can briefly fall behind. Re-order it
+        // to the front the instant the active Space or frontmost app changes.
+        wsnc.addObserver(self, selector: #selector(reorderFront),
+                         name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        wsnc.addObserver(self, selector: #selector(reorderFront),
+                         name: NSWorkspace.didActivateApplicationNotification, object: nil)
     }
 
     // MARK: - Public control
@@ -56,6 +64,13 @@ final class OverlayEngine {
     private func teardown() {
         for w in windows { w.orderOut(nil) }
         windows.removeAll()
+    }
+
+    /// Lightweight: just push existing overlays back to the front (no rebuild).
+    /// Used on Space/app switches to eliminate the momentary flash of un-tinted screen.
+    @objc private func reorderFront() {
+        guard active else { return }
+        for w in windows { w.orderFrontRegardless() }
     }
 
     @objc private func rebuild() {
@@ -127,6 +142,7 @@ private final class OverlayWindow: NSWindow {
         ignoresMouseEvents = true          // clicks pass straight through
         backgroundColor = .clear
         level = .screenSaver               // above normal windows and the menu bar
+        animationBehavior = .none          // no fade in/out — a fade reads as a flash
         // Cover every Space and stay put; also float over full-screen apps.
         collectionBehavior = [.canJoinAllSpaces, .stationary,
                               .fullScreenAuxiliary, .ignoresCycle]
