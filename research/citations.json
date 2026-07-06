@@ -1,0 +1,208 @@
+{
+  "meta": {
+    "purpose": "Master research database for NightFlow. Every feature must trace to a citation here. This file is read directly by the in-app 'The Science' tab (ResearchView).",
+    "lastUpdated": "2026-07-06",
+    "note": "Effect-strength field is an honest label so the app never oversells weak evidence. Values: 'strong' (multiple RCTs/action-spectrum data), 'moderate' (replicated but limited), 'emerging' (single or small studies). Recency verified across 2020-2026 literature on 2026-07-06 — added Brown 2022 melanopic-EDI consensus, Nagare 2019 & Cajochen 2022 (brightness>color), and a 'limitations' counter-evidence topic (Cochrane 2023, Frontiers 2025)."
+  },
+  "topics": [
+    {
+      "id": "blue-light",
+      "title": "Blue Light & Melatonin",
+      "summary": "Short-wavelength light near 460-480nm is the single most potent suppressor of melatonin. This is the strongest evidence base in the whole app.",
+      "implementationImpact": "Presets must aggressively cut the 460-480nm band. This is the primary target of the warm-tint overlay and any gamma boost.",
+      "effectStrength": "strong",
+      "citations": [
+        {
+          "title": "Action Spectrum for Melatonin Regulation in Humans: Evidence for a Novel Circadian Photoreceptor",
+          "authors": "Brainard GC, Hanifin JP, Greeson JM, et al.",
+          "journal": "Journal of Neuroscience",
+          "year": 2001,
+          "keyFinding": "Tested 8 wavelengths on 72 subjects; melatonin suppression peaked at 464nm, revealing a non-rod/non-cone circadian photoreceptor (melanopsin). The foundational action-spectrum study.",
+          "link": "https://www.jneurosci.org/content/21/16/6405"
+        },
+        {
+          "title": "An Action Spectrum for Melatonin Suppression: Evidence for a Novel Non-Rod, Non-Cone Photoreceptor System in Humans",
+          "authors": "Thapan K, Arendt J, Skene DJ",
+          "journal": "Journal of Physiology",
+          "year": 2001,
+          "keyFinding": "Independent action spectrum peaking near 459nm, confirming Brainard. Two labs, same conclusion in the same year.",
+          "link": "https://physoc.onlinelibrary.wiley.com/doi/10.1111/j.1469-7793.2001.t01-1-00261.x"
+        },
+        {
+          "title": "Blue Light from Light-Emitting Diodes Elicits a Dose-Dependent Suppression of Melatonin in Humans",
+          "authors": "West KE, Jablonski MR, Warfield B, et al.",
+          "journal": "Journal of Applied Physiology",
+          "year": 2011,
+          "keyFinding": "LED blue light (~469nm) suppresses melatonin in a dose-dependent way at ecologically realistic intensities, directly relevant to screens.",
+          "link": "https://journals.physiology.org/doi/full/10.1152/japplphysiol.01413.2009"
+        }
+      ]
+    },
+    {
+      "id": "green-light",
+      "title": "Green Light & Circadian Rhythm",
+      "summary": "The overlooked half of the problem. Green light (~555nm) suppresses melatonin nearly as much as blue at the START of exposure via the cone system, though the effect decays over hours. Standard blue-only filters miss this.",
+      "implementationImpact": "Presets must reduce the green channel too, not just blue. This is a core differentiator vs f.lux/Night Shift. Because green's effect decays with duration, aggressive green cut matters most in the first ~1-2 hours of wind-down.",
+      "effectStrength": "moderate",
+      "citations": [
+        {
+          "title": "Spectral Responses of the Human Circadian System Depend on the Irradiance and Duration of Exposure to Light",
+          "authors": "Gooley JJ, Rajaratnam SMW, Brainard GC, Kronauer RE, Czeisler CA, Lockley SW",
+          "journal": "Science Translational Medicine",
+          "year": 2010,
+          "keyFinding": "At the start of exposure, 555nm green light suppressed melatonin as effectively as 460nm blue. Green's effect diminished over 6.5h (cone-driven) while blue stayed constant (melanopsin-driven). Justifies blocking green, not just blue.",
+          "link": "https://pubmed.ncbi.nlm.nih.gov/20463367/"
+        },
+        {
+          "title": "The Spectral Sensitivity of Human Circadian Phase Resetting and Melatonin Suppression to Light Changes Dynamically with Light Duration",
+          "authors": "St Hilaire MA, Gooley JJ, Khalsa SBS, et al.",
+          "journal": "PNAS",
+          "year": 2022,
+          "keyFinding": "Confirms circadian spectral sensitivity shifts with exposure duration; multi-photoreceptor contribution means longer wavelengths matter more than a single blue-peak model predicts.",
+          "link": "https://www.pnas.org/doi/10.1073/pnas.2205301119"
+        }
+      ]
+    },
+    {
+      "id": "grayscale",
+      "title": "Grayscale & Screen Compulsion",
+      "summary": "Removing color reduces how rewarding a screen feels, cutting compulsive use. Evidence is real but thinner than the light research — one strong field study plus a replication. The app should present this honestly as 'emerging', not settled science.",
+      "implementationImpact": "Grayscale is a behavioral (dopamine/reward) tool, distinct from the light layers. Schedule it later in the evening (Phase 3) to interrupt doomscrolling. Justifies the app-whitelist so color-critical work is exempt.",
+      "effectStrength": "emerging",
+      "citations": [
+        {
+          "title": "True Colors: Grayscale Setting Reduces Screen Time in College Students",
+          "authors": "Holte AJ, Ferraro FR",
+          "journal": "The Social Science Journal",
+          "year": 2020,
+          "keyFinding": "161 students; the 73 switched to grayscale for 8-10 days used their phones ~39.7 min/day less, with the biggest drops in web browsing and social media. First large-scale field test.",
+          "link": "https://www.tandfonline.com/doi/full/10.1080/03623319.2020.1737461"
+        },
+        {
+          "title": "Is Life Brighter When Your Phone Is Not? The Efficacy of a Grayscale Smartphone Intervention Addressing Digital Well-Being",
+          "authors": "Dekker CA, Baumgartner SE",
+          "journal": "Mobile Media & Communication",
+          "year": 2024,
+          "keyFinding": "Replication showing grayscale reduces smartphone use, while cautioning effects on well-being are modest. Included for honesty about effect size.",
+          "link": "https://journals.sagepub.com/doi/10.1177/20501579231212062"
+        }
+      ]
+    },
+    {
+      "id": "brightness",
+      "title": "Overall Brightness (Lux) & Alertness",
+      "summary": "Beyond color, sheer intensity matters — and recent (2019-2022) work shows it matters MORE than color. Melatonin is suppressed at surprisingly low levels (~6 lux can halve it), bright light acutely raises alertness/cortisol, and warming color WITHOUT dimming is largely ineffective. This is the strongest justification for NightFlow's whole design.",
+      "implementationImpact": "The dimming overlay is not a nice-to-have — it is the highest-leverage layer. Every timeline phase MUST pair a color target with a real brightness reduction; a warm/red screen left bright still delays sleep. Modern target: aim the deep phases toward <=10 lux melanopic EDI (evening) trending to <=1 lux (bedtime) per Brown 2022.",
+      "effectStrength": "strong",
+      "citations": [
+        {
+          "title": "Sensitivity of the Human Circadian Pacemaker to Nocturnal Light: Melatonin Phase Resetting and Suppression",
+          "authors": "Zeitzer JM, Dijk DJ, Kronauer RE, Brown EN, Czeisler CA",
+          "journal": "Journal of Physiology",
+          "year": 2000,
+          "keyFinding": "Dose-response study: ~6 lux was enough for 50% melatonin suppression in sensitive individuals; melatonin is far more light-sensitive than assumed. Basis for aggressive dimming.",
+          "link": "https://physoc.onlinelibrary.wiley.com/doi/10.1111/j.1469-7793.2000.00695.x"
+        },
+        {
+          "title": "Recommendations for Daytime, Evening, and Nighttime Indoor Light Exposure to Best Support Physiology, Sleep, and Wakefulness in Healthy Adults",
+          "authors": "Brown TM, Brainard GC, Cajochen C, et al.",
+          "journal": "PLOS Biology",
+          "year": 2022,
+          "keyFinding": "Expert consensus using the modern SI-compliant metric (melanopic EDI, CIE S 026): evening <=10 lux melanopic EDI, sleep environment <=1 lux, daytime >=250 lux. The current gold-standard quantitative targets for the timeline's deep phases.",
+          "link": "https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3001571"
+        },
+        {
+          "title": "Does the iPad Night Shift Mode Reduce Melatonin Suppression?",
+          "authors": "Nagare R, Plitnick B, Figueiro MG (Lighting Research Center)",
+          "journal": "Lighting Research & Technology",
+          "year": 2019,
+          "keyFinding": "Warming screen color alone (Night Shift) did NOT meaningfully reduce melatonin suppression unless brightness was also lowered. Direct evidence that color-only apps are incomplete and that dimming is essential — the core rationale for NightFlow over f.lux/Night Shift.",
+          "link": "https://pubmed.ncbi.nlm.nih.gov/31191118/"
+        },
+        {
+          "title": "Influence of Evening Light Exposure on Polysomnographically Assessed Night-Time Sleep: A Systematic Review with Meta-Analysis",
+          "authors": "Cajochen C, Stefani O, Schöllhorn I, Lang D, Chellappa SL",
+          "journal": "Lighting Research & Technology",
+          "year": 2022,
+          "keyFinding": "Meta-analysis confirming evening light exposure measurably disrupts objectively-measured (PSG) sleep, with intensity a key driver. Raises the evidence for the brightness layer from single-study to meta-analytic.",
+          "link": "https://journals.sagepub.com/doi/10.1177/14771535221078765"
+        }
+      ]
+    },
+    {
+      "id": "limitations",
+      "title": "Limitations & Counter-Evidence (Honesty Section)",
+      "summary": "What the science does NOT firmly support. Shown in-app to prove NightFlow is honest, not hype. The strongest recent challenge: blue-light-FILTERING glasses show little proven benefit — but note the crucial distinction from what this app actually does.",
+      "implementationImpact": "Copy must never claim 'blue-light glasses science'. NightFlow's mechanism is REDUCING the melanopic light dose reaching the eye (dimming + heavy spectral shift + correct timing), which is better supported than the weak-filter-glasses approach the Cochrane review critiques. The Science tab should surface this section prominently.",
+      "effectStrength": "moderate",
+      "citations": [
+        {
+          "title": "Blue-Light Filtering Spectacle Lenses for Visual Performance, Sleep, and Macular Health in Adults",
+          "authors": "Singh S, Downie LE, Anderson AJ, et al. (Cochrane Review)",
+          "journal": "Cochrane Database of Systematic Reviews",
+          "year": 2023,
+          "keyFinding": "17 RCTs, 619 participants: blue-light-FILTERING glasses showed no clear benefit for eye strain or sleep. Important caveat: these lenses block only a modest slice of blue and do NOT dim or heavily shift spectrum — unlike NightFlow's approach. Cited for honesty and to sharpen our positioning.",
+          "link": "https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD013244.pub2/full"
+        },
+        {
+          "title": "Efficacy of Blue-Light Blocking Glasses on Actigraphic Sleep Outcomes: A Systematic Review and Meta-Analysis of Randomized Controlled Crossover Trials",
+          "authors": "Systematic review team",
+          "journal": "Frontiers in Neurology",
+          "year": 2025,
+          "keyFinding": "Most recent meta-analysis on blue-blocking glasses; effects on actigraphic sleep are small and inconsistent. Reinforces that a weak spectral filter is not enough — the dose-reduction (dimming + timing) approach is what the stronger evidence supports.",
+          "link": "https://www.frontiersin.org/journals/neurology/articles/10.3389/fneur.2025.1699303/full"
+        }
+      ]
+    },
+    {
+      "id": "timing",
+      "title": "Timing of the Evening Wind-Down",
+      "summary": "Melatonin naturally begins to rise (Dim Light Melatonin Onset, DLMO) roughly 2-3 hours before natural sleep onset. Light exposure in this window is what delays the clock.",
+      "implementationImpact": "Sets the whole timeline structure: wind-down should begin ~2-3h before target bedtime, with the deepest filtering + grayscale concentrated in the final 1-2h. Drives the default phase offsets in CircadianEngine.",
+      "effectStrength": "strong",
+      "citations": [
+        {
+          "title": "Dim Light Melatonin Onset (DLMO): A Tool for the Analysis of Circadian Phase in Human Sleep and Chronobiological Disorders",
+          "authors": "Pandi-Perumal SR, Smits M, Spence W, et al.",
+          "journal": "Progress in Neuro-Psychopharmacology & Biological Psychiatry",
+          "year": 2007,
+          "keyFinding": "Establishes DLMO as the gold-standard marker of biological night onset, typically 2-3h before habitual sleep. Basis for anchoring the wind-down schedule to bedtime.",
+          "link": "https://pubmed.ncbi.nlm.nih.gov/16884842/"
+        },
+        {
+          "title": "The Dim Light Melatonin Onset Across Ages, Methodologies, and Sex and Its Relationship with Morningness/Eveningness",
+          "authors": "Crowley SJ, Eastman CI, et al.",
+          "journal": "Sleep / PMC",
+          "year": 2023,
+          "keyFinding": "DLMO precedes sleep onset by ~2-3h on average and varies with chronotype, supporting a user-adjustable (not fixed) timeline.",
+          "link": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10171641/"
+        }
+      ]
+    },
+    {
+      "id": "red-light",
+      "title": "Red Light Safety",
+      "summary": "Long-wavelength red light (~620-670nm) has minimal impact on melatonin because it barely stimulates melanopsin. This is why the deepest 'Red Mode' preset is the safest for the final stretch before sleep.",
+      "implementationImpact": "Red Mode is the terminal phase of the timeline. Presets shift toward a near-pure red spectrum as bedtime approaches. Combined with heavy dimming and grayscale, it's the least alerting state a lit screen can be in.",
+      "effectStrength": "moderate",
+      "citations": [
+        {
+          "title": "Comparative Effects of Red and Blue LED Light on Melatonin Levels During Three-Hour Exposure in Healthy Adults",
+          "authors": "Multiple (2025 comparative study)",
+          "journal": "PMC / peer-reviewed",
+          "year": 2025,
+          "keyFinding": "After 2h, red light allowed melatonin to recover to ~26.0 pg/mL while blue held it suppressed at ~7.5 pg/mL. Direct human evidence that red is far gentler on melatonin.",
+          "link": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12113466/"
+        },
+        {
+          "title": "Modeling the Influence of Nighttime Light on Melatonin Suppression in Humans: Milestones and Perspectives",
+          "authors": "Review",
+          "journal": "ScienceDirect (Journal of Photochemistry & Photobiology)",
+          "year": 2023,
+          "keyFinding": "Review of melatonin action spectra confirming suppression falls off sharply above ~600nm; red wavelengths sit in the safe tail. Context for choosing the Red Mode target.",
+          "link": "https://www.sciencedirect.com/science/article/pii/S2666469023000404"
+        }
+      ]
+    }
+  ]
+}
