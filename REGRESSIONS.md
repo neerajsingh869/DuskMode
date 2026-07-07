@@ -97,6 +97,33 @@
 - **Re-check:** master on, dim 50% → gamma readback maxima ≈ 0.54×multipliers
   AND zero DuskMode windows at layer 1000 in `CGWindowListCopyWindowInfo`.
 
+## 10. Gamma silently latching OFF → app drops to the overlay for the session
+- **Symptom:** intermittent — after the app had been running a while (across a
+  sleep/wake or lid open), BOTH bugs #5 (reddish film) and #9 (app-switch flash)
+  came back at once, independent of grayscale. Fresh launch was fine; "sometimes
+  flashes, sometimes not" was the tell. Screenshots showed the tint (proof it was
+  the OVERLAY — gamma is invisible to screencapture; verified live on this M4).
+- **Root cause:** `GammaEngine.isAvailable` was a one-way latch. A
+  `CGSetDisplayTransferByFormula` / `CGGetActiveDisplayList` call fails harmlessly
+  for a moment when the display is asleep or mid-reconfiguration (lid close/open,
+  monitor hot-plug). The old code flipped `isAvailable = false` on the FIRST such
+  failure and never retried, so the whole app silently fell to the overlay
+  (worse colour + flash) for the rest of the session. Gamma works fine on this M4
+  — proven by driving a warm gamma directly (screen turned deep orange). It was
+  the latch, not the hardware.
+- **Fix (2026-07-07):** capability is decided ONCE at startup (`probeCapability`)
+  and never revoked by transient runtime failures. A failed set just skips that
+  cycle; `apply()` returns the fixed capability (not the per-call result) so a
+  transient miss can't hand the frame to the overlay. Wake reassert retries at
+  0.3/1.0/2.5 s so the tint reliably returns after lid open.
+- **Invariant:** runtime set/list failures must NEVER flip `isAvailable`. Only the
+  one-time startup probe may set it false. `apply()` returns capability, not
+  per-call success. This is what actually keeps #5 and #9 fixed on this hardware.
+- **Re-check:** master on, warmth up → gamma readback non-identity AND zero
+  DuskMode overlay windows; sleep/wake (close+open lid) → tint returns, still no
+  overlay window; ⌘Tab → no flash. Screenshot of a warm screen shows NO tint
+  (proves gamma, not overlay, is rendering).
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)

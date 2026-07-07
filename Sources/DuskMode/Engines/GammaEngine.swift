@@ -20,7 +20,17 @@ import DuskModeCore
 /// exits, so even a crash can never leave the screen tinted or dimmed.
 final class GammaEngine {
 
-    private(set) var isAvailable = true
+    /// Whether the gamma pipeline is usable on this machine. Determined ONCE at
+    /// startup and NEVER revoked by transient runtime failures.
+    ///
+    /// REGRESSION GUARD (REGRESSIONS.md #10): a `CGSetDisplayTransferByFormula` call
+    /// can fail harmlessly for a moment when the display is asleep or mid-reconfig
+    /// (lid close/open, monitor hot-plug). The old code latched `isAvailable = false`
+    /// on the first such failure and silently dropped the ENTIRE app onto the inferior
+    /// overlay for the rest of the session — muddy color + app-switch flash, with no
+    /// recovery. Gamma actually works fine on this M4; it was the latch that broke it.
+    /// Now we skip the failed cycle and reassert on the next event; gamma stays THE path.
+    private(set) var isAvailable: Bool
 
     /// Deepest allowed gamma dim — always leaves ≥8% output so the screen can never
     /// become unusable. Mirrors OverlayEngine.maxDimAlpha.
@@ -31,6 +41,7 @@ final class GammaEngine {
     private var dim = 0.0
 
     init() {
+        isAvailable = GammaEngine.probeCapability()
         NotificationCenter.default.addObserver(
             self, selector: #selector(reapply),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
@@ -40,6 +51,9 @@ final class GammaEngine {
     }
 
     /// Returns true when the gamma path is handling colour+dim (so the overlay shouldn't).
+    /// This reflects the machine's fixed capability, NOT whether this single set call
+    /// happened to land — a transient failure (display asleep) must not hand the frame
+    /// to the overlay, or the app-switch flash comes back for that cycle.
     @discardableResult
     func apply(enabled: Bool, warmth: Double, dim: Double) -> Bool {
         guard isAvailable else { return false }
@@ -51,7 +65,8 @@ final class GammaEngine {
             if wasActive { CGDisplayRestoreColorSyncSettings() }
             return true
         }
-        return setAllDisplays(currentMultiplier())
+        setAllDisplays(currentMultiplier())   // may transiently fail; retried on next event
+        return true                           // gamma remains THE path either way
     }
 
     /// Blackbody warmth multipliers scaled by the dim factor (all channels equally,
@@ -70,13 +85,31 @@ final class GammaEngine {
 
     // MARK: - Private
 
+    /// One-time capability probe. Confirms the gamma API path is wired up on this
+    /// machine (display list + a formula set both accepted). It CANNOT detect the
+    /// "stores but never applies" newest-Apple-Silicon regression — that returns
+    /// success too — but on hardware where the API is genuinely dead the set call
+    /// errors out, and we fall back to the overlay. If the display isn't ready at
+    /// launch, assume capable rather than punishing gamma for the whole session.
+    private static func probeCapability() -> Bool {
+        var count: UInt32 = 0
+        var displays = [CGDirectDisplayID](repeating: 0, count: 16)
+        guard CGGetActiveDisplayList(16, &displays, &count) == .success, count > 0 else {
+            return true
+        }
+        let err = CGSetDisplayTransferByFormula(displays[0], 0, 1, 1, 0, 1, 1, 0, 1, 1)
+        return err == .success
+    }
+
+    /// Push the current multiplier to every display. Returns whether at least one set
+    /// landed, for logging only — a transient failure (display asleep / reconfiguring)
+    /// must NOT flip `isAvailable`; the next screen-param or wake event reasserts it.
     @discardableResult
     private func setAllDisplays(_ m: (r: Double, g: Double, b: Double)) -> Bool {
         var count: UInt32 = 0
         var displays = [CGDirectDisplayID](repeating: 0, count: 16)
         guard CGGetActiveDisplayList(16, &displays, &count) == .success, count > 0 else {
-            isAvailable = false
-            return false
+            return false   // display not ready — skip this cycle, do not latch
         }
         var anySuccess = false
         for display in displays.prefix(Int(count)) {
@@ -89,7 +122,6 @@ final class GammaEngine {
                 0, CGGammaValue(m.b), 1)
             anySuccess = anySuccess || (err == .success)
         }
-        if !anySuccess { isAvailable = false }
         return anySuccess
     }
 
@@ -100,9 +132,14 @@ final class GammaEngine {
 
     @objc private func reapplyAfterWake() {
         guard active else { return }
-        // Give the display pipeline a moment to settle after wake.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.reapply()
+        // WindowServer can reset gamma to identity across sleep, and the display may
+        // come back gradually — a single attempt can land before it's ready and then
+        // never retry (nothing reasserts in manual mode). Retry over a few seconds so
+        // the tint reliably returns after lid open. (REGRESSIONS.md #10.)
+        for delay in [0.3, 1.0, 2.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.reapply()
+            }
         }
     }
 }
