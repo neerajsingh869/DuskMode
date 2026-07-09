@@ -140,6 +140,34 @@
 - **Re-check:** near-bedtime auto screen reads as a WARM/sepia gray, not a cold neutral
   gray (proves warmth is stacking on top of grayscale).
 
+## 12. Emergency Color override + the single apply choke point (Phase 3)
+- **What it is:** a momentary "real colours NOW" override (default 60s, ⌥⌘C or the
+  popover button) that suspends every filter, then auto-reverts to whatever mode was
+  running (manual or schedule).
+- **Invariant — one choke point:** all screen state flows through
+  `AppDelegate.applyEffectiveState()`. It applies the Emergency branch FIRST (gamma
+  `enabled:false`, overlay off, grayscale off) and returns; only when not active does it
+  route to the schedule or the manual path. The 30s schedule tick calls it too
+  (`onTarget → applyEffectiveState`), so an active override always wins over a tick.
+  Never re-add a path that applies gamma/overlay/grayscale outside this method.
+- **Invariant — override rides the same layers (not a new window):** Emergency Color
+  restores full colour by driving GAMMA to identity, NOT by adding/removing an overlay
+  window (keeps #9/#10 — zero DuskMode windows on working-gamma HW throughout the
+  override and after revert).
+- **Invariant — grayscale edge-trigger stays consistent:** on entering the override,
+  grayscale is turned off (only if on) and the pre-override state is remembered; on exit,
+  `scheduledGrayscale` is reset to nil so the schedule re-asserts its own grayscale next
+  eval, and in MANUAL mode the pre-override grayscale is restored edge-triggered (touch
+  the system only if it differs — no spurious bezel). Two bezels max per override
+  (off on enter, back on exit) are expected, not a bug (see #3).
+- **Re-check:** master on + warmth up → gamma readback warm, 0 overlay windows; fire
+  Emergency Color → gamma readback ≈ 1/1/1, still 0 windows; wait out the timer (or tap
+  again) → gamma returns to the prior warm values, still 0 windows. Verified live
+  2026-07-09 via a temporary distributed-notification seam (removed before commit):
+  warm 1.000/0.819/0.681 → identity 1/1/1 → auto-revert 1.000/0.819/0.681, 0 windows
+  throughout. Carbon ⌥⌘C hotkey registration confirmed (RegisterEventHotKey == noErr);
+  the physical keypress needs a human (keystroke injection is sandbox-blocked here).
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)

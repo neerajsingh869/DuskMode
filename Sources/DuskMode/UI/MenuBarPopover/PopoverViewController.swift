@@ -20,7 +20,12 @@ final class PopoverViewController: NSViewController {
     private let overlayEngine: OverlayEngine
     private let grayscaleEngine: GrayscaleEngine
     private let circadianEngine: CircadianEngine
+    private weak var emergencyController: EmergencyColorControlling?
     private let prefs = PreferencesStore.shared
+
+    /// Ticks once a second only while the popover is open AND Emergency Color is
+    /// running, to keep the button's countdown fresh. Torn down on disappear.
+    private var emergencyCountdownTimer: Timer?
 
     private static let contentWidth: CGFloat = 300
     private static let insets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
@@ -32,6 +37,7 @@ final class PopoverViewController: NSViewController {
     private let warmthSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private let dimSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private let grayscaleSwitch = NSSwitch()
+    private let emergencyButton = NSButton(title: "", target: nil, action: nil)
 
     private let bedtimeTitle = NSTextField(labelWithString: "Bedtime")
     private let warmthTitle = NSTextField(labelWithString: "Warmth")
@@ -41,11 +47,16 @@ final class PopoverViewController: NSViewController {
 
     init(overlayEngine: OverlayEngine,
          grayscaleEngine: GrayscaleEngine,
-         circadianEngine: CircadianEngine) {
+         circadianEngine: CircadianEngine,
+         emergencyController: EmergencyColorControlling) {
         self.overlayEngine = overlayEngine
         self.grayscaleEngine = grayscaleEngine
         self.circadianEngine = circadianEngine
+        self.emergencyController = emergencyController
         super.init(nibName: nil, bundle: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(emergencyStateChanged),
+            name: AppDelegate.emergencyColorChanged, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
@@ -116,6 +127,20 @@ final class PopoverViewController: NSViewController {
         grayscaleCaption.preferredMaxLayoutWidth = Self.contentWidth
         grayscaleCaption.isSelectable = false
 
+        // Emergency Color: a momentary "real colours NOW" override. Suspends every
+        // filter for 60s, then the wind-down (manual or schedule) resumes on its own.
+        emergencyButton.bezelStyle = .rounded
+        emergencyButton.controlSize = .regular
+        emergencyButton.target = self
+        emergencyButton.action = #selector(emergencyTapped)
+        emergencyButton.toolTip = "Suspend all filters for 60 seconds, then auto-resume. Shortcut: ⌥⌘C"
+        let emergencyCaption = NSTextField(wrappingLabelWithString:
+            "Instantly restores true colour for 60 seconds — for when you need accurate colours — then your wind-down resumes automatically. Shortcut: ⌥⌘C.")
+        emergencyCaption.font = .systemFont(ofSize: 11)
+        emergencyCaption.textColor = .secondaryLabelColor
+        emergencyCaption.preferredMaxLayoutWidth = Self.contentWidth
+        emergencyCaption.isSelectable = false
+
         // Reset: one click back to first-launch values (warmth 3500 K, no dimming,
         // grayscale off, bedtime 23:00). Master/schedule switches stay as they are.
         let resetButton = NSButton(title: "Reset to Defaults",
@@ -130,6 +155,7 @@ final class PopoverViewController: NSViewController {
         let separator2 = separator()
         let separator3 = separator()
         let separator4 = separator()
+        let separator5 = separator()
         let warmthRow = row(leading: warmthTitle, trailing: warmthValue)
         let dimRow = row(leading: dimTitle, trailing: dimValue)
 
@@ -149,6 +175,9 @@ final class PopoverViewController: NSViewController {
             grayscaleRow,
             grayscaleCaption,
             separator4,
+            emergencyButton,
+            emergencyCaption,
+            separator5,
             resetButton
         ])
         stack.orientation = .vertical
@@ -173,6 +202,9 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(6, after: grayscaleRow)
         stack.setCustomSpacing(12, after: grayscaleCaption)
         stack.setCustomSpacing(10, after: separator4)
+        stack.setCustomSpacing(6, after: emergencyButton)
+        stack.setCustomSpacing(12, after: emergencyCaption)
+        stack.setCustomSpacing(10, after: separator5)
 
         root.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -183,10 +215,10 @@ final class PopoverViewController: NSViewController {
             root.widthAnchor.constraint(
                 equalToConstant: Self.contentWidth + Self.insets.left + Self.insets.right)
         ])
-        for wide in [warmthSlider, dimSlider] as [NSView] {
+        for wide in [warmthSlider, dimSlider, emergencyButton] as [NSView] {
             wide.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         }
-        for caption in [scheduleStatus, grayscaleCaption] {
+        for caption in [scheduleStatus, grayscaleCaption, emergencyCaption] {
             caption.widthAnchor.constraint(
                 lessThanOrEqualToConstant: Self.contentWidth).isActive = true
         }
@@ -198,9 +230,16 @@ final class PopoverViewController: NSViewController {
     override func viewWillAppear() {
         super.viewWillAppear()
         syncFromState()
+        startEmergencyCountdownIfNeeded()
         // The status caption's length varies (phase names, times) — re-fit so the
         // popover never clips it.
         preferredContentSize = view.fittingSize
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        emergencyCountdownTimer?.invalidate()
+        emergencyCountdownTimer = nil
     }
 
     // MARK: - Sync
@@ -223,6 +262,52 @@ final class PopoverViewController: NSViewController {
         updateValueLabels()
         updateEnabledStates()
         updateScheduleStatus()
+        updateEmergencyButton()
+    }
+
+    /// Reflects Emergency Color state: idle = "Emergency Color", active = a live
+    /// countdown that doubles as a cancel button.
+    private func updateEmergencyButton() {
+        guard let controller = emergencyController else { return }
+        if controller.isEmergencyColorActive, let end = controller.emergencyColorEndDate {
+            let remaining = max(0, Int(end.timeIntervalSinceNow.rounded(.up)))
+            emergencyButton.title = "Full Color · \(remaining)s  (tap to end)"
+        } else {
+            emergencyButton.title = "Emergency Color"
+        }
+    }
+
+    // MARK: - Emergency Color
+
+    @objc private func emergencyTapped() {
+        emergencyController?.toggleEmergencyColor()
+        // State flips synchronously; refresh immediately (the notification also fires).
+        updateEmergencyButton()
+        startEmergencyCountdownIfNeeded()
+    }
+
+    @objc private func emergencyStateChanged() {
+        updateEmergencyButton()
+        startEmergencyCountdownIfNeeded()
+    }
+
+    private func startEmergencyCountdownIfNeeded() {
+        emergencyCountdownTimer?.invalidate()
+        emergencyCountdownTimer = nil
+        guard emergencyController?.isEmergencyColorActive == true else { return }
+        let t = Timer(timeInterval: 1, target: self,
+                      selector: #selector(emergencyCountdownTick),
+                      userInfo: nil, repeats: true)
+        RunLoop.main.add(t, forMode: .common)
+        emergencyCountdownTimer = t
+    }
+
+    @objc private func emergencyCountdownTick() {
+        updateEmergencyButton()
+        if emergencyController?.isEmergencyColorActive != true {
+            emergencyCountdownTimer?.invalidate()
+            emergencyCountdownTimer = nil
+        }
     }
 
     private func updateValueLabels() {
