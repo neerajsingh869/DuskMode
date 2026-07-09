@@ -258,7 +258,12 @@ final class PopoverViewController: NSViewController {
         masterSwitch.state = filtersActive ? .on : .off
         warmthSlider.doubleValue = (scheduleOn && target.active) ? target.warmth : prefs.warmth
         dimSlider.doubleValue = (scheduleOn && target.active) ? target.dim : prefs.dim
-        grayscaleSwitch.state = grayscaleEngine.isGrayscaleEnabled() ? .on : .off
+        // Reflect grayscale INTENT, not the momentary system state: during an emergency
+        // the system grayscale is suppressed for real colour, but the setting is intact,
+        // so the switch stays ON (it comes back when the emergency ends).
+        let grayscaleOn = grayscaleEngine.isGrayscaleEnabled()
+            || (emergencyController?.grayscaleSuspendedForEmergency ?? false)
+        grayscaleSwitch.state = grayscaleOn ? .on : .off
         updateValueLabels()
         updateEnabledStates()
         updateScheduleStatus()

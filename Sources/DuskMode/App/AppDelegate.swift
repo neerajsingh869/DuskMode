@@ -10,6 +10,9 @@ protocol EmergencyColorControlling: AnyObject {
     /// True only when there's actually a filter to suspend (colour/dim on via manual
     /// or an active schedule, or grayscale on). The button/hotkey are no-ops otherwise.
     var isEmergencyColorAvailable: Bool { get }
+    /// True while an emergency is momentarily holding grayscale off. The UI shows the
+    /// grayscale switch as ON in this case — the setting is intact, just suspended.
+    var grayscaleSuspendedForEmergency: Bool { get }
     func toggleEmergencyColor()
 }
 
@@ -40,6 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
     private var emergencyHotKey: GlobalHotKey?
 
     var isEmergencyColorActive: Bool { emergencyColorEndDate != nil }
+
+    /// While an emergency is running and it suppressed grayscale, the user's grayscale
+    /// intent is still ON — the switch should show that, not the suspended system state.
+    var grayscaleSuspendedForEmergency: Bool { isEmergencyColorActive && grayscaleBeforeEmergency }
 
     /// Something is currently filtering the screen, so there's a point to Emergency
     /// Color: colour/dim on (manual master, or an active schedule) OR grayscale on.
@@ -118,6 +125,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
         } else {
             if circadianEngine.isEnabled {
                 circadianEngine.setEnabled(false)
+                // The schedule owned any grayscale IT turned on (~bedtime). Stopping the
+                // schedule reverts its effects: warmth/dim revert via applyEffectiveState,
+                // and this releases that grayscale too — so turning DuskMode/the schedule
+                // off returns the screen fully to normal, not stuck gray. A grayscale the
+                // user toggled by hand has scheduledGrayscale != true, so it's left alone.
+                // Skipped during an emergency (system grayscale is momentarily off then;
+                // cancelEmergencyColor restores the correct state).
+                if scheduledGrayscale == true,
+                   !isEmergencyColorActive,
+                   grayscaleEngine.isGrayscaleEnabled() {
+                    grayscaleEngine.setGrayscale(false)
+                }
                 scheduledGrayscale = nil   // schedule no longer owns grayscale
             }
         }

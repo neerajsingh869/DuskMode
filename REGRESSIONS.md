@@ -180,6 +180,41 @@
   (RegisterEventHotKey == noErr); the physical keypress needs a human (keystroke injection
   is sandbox-blocked here).
 
+## 13. Grayscale switch reads INTENT, not the momentary system state (Phase 3)
+- **Symptom (Neeraj, 2026-07-09):** grayscale ON, then fire Emergency Color → the popover's
+  grayscale switch flips to OFF during the override (then back ON when it ends). Confusing:
+  the setting is intact, it's only *suspended* for real colour.
+- **Root cause:** the switch mirrored the live system state
+  (`grayscaleEngine.isGrayscaleEnabled()`), which the emergency genuinely turns off (#12).
+- **Fix:** the switch reflects grayscale *intent*. `syncFromState` ORs in
+  `grayscaleSuspendedForEmergency` (= emergency active AND `grayscaleBeforeEmergency`), so
+  it stays ON while an emergency holds grayscale off. The SYSTEM grayscale is still really
+  off during the override (#12 unchanged) — only the UI display changed.
+- **Invariant:** UI switches show the user's intended setting, not a momentarily-suspended
+  system state. Never regress the switch back to a bare `isGrayscaleEnabled()` read.
+- **Re-check:** grayscale ON → fire Emergency → switch still shows ON (screen is colour);
+  emergency ends → still ON, screen gray again.
+
+## 14. Grayscale orphaned after the schedule/DuskMode is turned off (Phase 3)
+- **Symptom (Neeraj, 2026-07-09):** near bedtime the schedule had turned grayscale on; he
+  turned DuskMode off (master switch, which also turns the schedule off) → warmth reverted
+  but the screen stayed GRAY. App "off" yet still altering the screen.
+- **Root cause:** turning the schedule off in `preferencesChanged` ran `scheduledGrayscale =
+  nil` but never released the grayscale the schedule had turned on.
+- **Fix:** when the schedule turns off, if the schedule currently owned an on-grayscale
+  (`scheduledGrayscale == true`) it is released (`setGrayscale(false)`), guarded by
+  `isGrayscaleEnabled()` (edge-trigger, no stray bezel — #4) and skipped during an emergency
+  (system grayscale is momentarily off then; `cancelEmergencyColor` restores correctly).
+- **Design (settled with Neeraj 2026-07-09):** only SCHEDULE-owned grayscale is auto-released.
+  Grayscale the user toggled BY HAND (`scheduledGrayscale != true`) is a peer setting and is
+  left alone when the master/schedule turns off — it only goes off via its own toggle or app
+  quit. Do not sweep manual grayscale on master-off.
+- **Invariant:** stopping the schedule reverts ALL of the schedule's effects, grayscale
+  included; manual grayscale is never touched by a master/schedule off.
+- **Re-check:** schedule ON in the grayscale phase → master off → screen returns fully to
+  normal (no warmth, no gray), one bezel. Separately: schedule OFF, toggle grayscale on by
+  hand, master off → grayscale STAYS on.
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)
