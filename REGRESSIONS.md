@@ -97,7 +97,7 @@
 - **Re-check:** master on, dim 50% → gamma readback maxima ≈ 0.54×multipliers
   AND zero DuskMode windows at layer 1000 in `CGWindowListCopyWindowInfo`.
 
-## 10. Gamma silently latching OFF → app drops to the overlay for the session
+## 10. Gamma silently latching OFF → app drops to the overlay for the session  ✅ Neeraj-confirmed fixed (2026-07-09)
 - **Symptom:** intermittent — after the app had been running a while (across a
   sleep/wake or lid open), BOTH bugs #5 (reddish film) and #9 (app-switch flash)
   came back at once, independent of grayscale. Fresh launch was fine; "sometimes
@@ -123,6 +123,22 @@
   DuskMode overlay windows; sleep/wake (close+open lid) → tint returns, still no
   overlay window; ⌘Tab → no flash. Screenshot of a warm screen shows NO tint
   (proves gamma, not overlay, is rendering).
+
+## 11. Grayscale scheduling + grayscale×warmth stacking — SETTLED design, not a bug
+- **Grayscale is bundled in auto mode ON PURPOSE** (flips on ~2h before bedtime; timing is
+  the whole point of the behavioral effect) and is ALSO an independent manual toggle when
+  auto is off. Settled with Neeraj 2026-07-09 — do not "split grayscale out of auto".
+- **Grayscale and warmth STACK and must both stay active together.** macOS composites the
+  accessibility grayscale filter first, then applies the gamma LUT (warmth+dim) last, at
+  scanout. Grayscale desaturates but does NOT reduce blue; warmth cuts blue on the
+  resulting grays → warm sepia monochrome (behavioral + physiological, both reach panel).
+- **Invariant:** warmth/colour must ride the FINAL output stage (gamma) so grayscale can't
+  cancel the blue cut. Never introduce a colour/warmth layer that sits *before* the
+  grayscale filter. GammaEngine and GrayscaleEngine stay independent; near bedtime both
+  are on simultaneously (`applyScheduleTarget` applies gamma every tick + edge-toggles
+  grayscale — see #4).
+- **Re-check:** near-bedtime auto screen reads as a WARM/sepia gray, not a cold neutral
+  gray (proves warmth is stacking on top of grayscale).
 
 ---
 
