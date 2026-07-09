@@ -272,8 +272,11 @@ final class PopoverViewController: NSViewController {
         if controller.isEmergencyColorActive, let end = controller.emergencyColorEndDate {
             let remaining = max(0, Int(end.timeIntervalSinceNow.rounded(.up)))
             emergencyButton.title = "Full Color · \(remaining)s  (tap to end)"
+            emergencyButton.isEnabled = true
         } else {
             emergencyButton.title = "Emergency Color"
+            // Only offer it when something is actually being filtered.
+            emergencyButton.isEnabled = controller.isEmergencyColorAvailable
         }
     }
 
@@ -287,7 +290,9 @@ final class PopoverViewController: NSViewController {
     }
 
     @objc private func emergencyStateChanged() {
-        updateEmergencyButton()
+        // Full resync so the grayscale switch reflects its restored position when an
+        // emergency ends, and the button's enabled state stays correct.
+        syncFromState()
         startEmergencyCountdownIfNeeded()
     }
 
@@ -398,6 +403,8 @@ final class PopoverViewController: NSViewController {
         // momentary choice, and the schedule only re-asserts grayscale at the next
         // phase boundary (edge-triggered in AppDelegate).
         grayscaleEngine.setGrayscale(grayscaleSwitch.state == .on)
+        // Grayscale alone makes Emergency Color meaningful, so refresh its enabled state.
+        updateEmergencyButton()
     }
 
     @objc private func resetTapped() {

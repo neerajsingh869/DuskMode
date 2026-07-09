@@ -154,19 +154,31 @@
   restores full colour by driving GAMMA to identity, NOT by adding/removing an overlay
   window (keeps #9/#10 — zero DuskMode windows on working-gamma HW throughout the
   override and after revert).
-- **Invariant — grayscale edge-trigger stays consistent:** on entering the override,
-  grayscale is turned off (only if on) and the pre-override state is remembered; on exit,
-  `scheduledGrayscale` is reset to nil so the schedule re-asserts its own grayscale next
-  eval, and in MANUAL mode the pre-override grayscale is restored edge-triggered (touch
-  the system only if it differs — no spurious bezel). Two bezels max per override
+- **Invariant — grayscale is saved/restored on the TRANSITIONS, not per tick:** grayscale
+  is touched ONLY in `activateEmergencyColor` (record `grayscaleBeforeEmergency`, then turn
+  off if it was on) and `cancelEmergencyColor` (restore). The emergency branch of
+  `applyEffectiveState` must NOT touch grayscale, so the 30s schedule tick can't re-toggle
+  it. The restore is UNCONDITIONAL (`if grayscaleBeforeEmergency { setGrayscale(true) }`) —
+  it must NOT gate on a read-back of the current system state, because the UA getter can
+  lag right after a set and the grayscale would be silently lost (the exact bug Neeraj hit
+  2026-07-09). On exit `scheduledGrayscale` is set to `true` when grayscale was restored
+  (else nil) so the schedule's edge-trigger stays consistent. Two bezels max per override
   (off on enter, back on exit) are expected, not a bug (see #3).
-- **Re-check:** master on + warmth up → gamma readback warm, 0 overlay windows; fire
-  Emergency Color → gamma readback ≈ 1/1/1, still 0 windows; wait out the timer (or tap
-  again) → gamma returns to the prior warm values, still 0 windows. Verified live
-  2026-07-09 via a temporary distributed-notification seam (removed before commit):
-  warm 1.000/0.819/0.681 → identity 1/1/1 → auto-revert 1.000/0.819/0.681, 0 windows
-  throughout. Carbon ⌥⌘C hotkey registration confirmed (RegisterEventHotKey == noErr);
-  the physical keypress needs a human (keystroke injection is sandbox-blocked here).
+- **Invariant — availability gating:** Emergency Color is offered/activatable ONLY when
+  something is actually filtering the screen — `isEmergencyColorAvailable` = colour active
+  (manual master, or an active schedule) OR grayscale on. `toggleEmergencyColor` no-ops
+  otherwise, and the popover button is disabled. Don't let the override arm on an
+  unfiltered screen (there'd be nothing to restore, and cancel would fire a stray bezel).
+- **Re-check:** (a) master off + schedule off + grayscale off → Emergency button disabled,
+  ⌥⌘C does nothing. (b) master on + warmth up → gamma warm, 0 overlay windows; fire
+  Emergency → gamma ≈ 1/1/1, 0 windows; wait out the timer (or tap again) → gamma back to
+  the prior warm values. (c) grayscale ON + fire Emergency → grayscale off during; on
+  revert → grayscale ON again. All three verified live 2026-07-09 via a temporary
+  distributed-notification seam (removed before commit): warm 1.000/0.819/0.681 + gray ON
+  → identity 1/1/1 + gray off → auto-revert 1.000/0.819/0.681 + gray ON; unfiltered toggle
+  reported avail=false active=false. Carbon ⌥⌘C hotkey registration confirmed
+  (RegisterEventHotKey == noErr); the physical keypress needs a human (keystroke injection
+  is sandbox-blocked here).
 
 ---
 

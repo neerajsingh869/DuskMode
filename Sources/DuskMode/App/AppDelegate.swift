@@ -7,6 +7,9 @@ import DuskModeCore
 protocol EmergencyColorControlling: AnyObject {
     var isEmergencyColorActive: Bool { get }
     var emergencyColorEndDate: Date? { get }
+    /// True only when there's actually a filter to suspend (colour/dim on via manual
+    /// or an active schedule, or grayscale on). The button/hotkey are no-ops otherwise.
+    var isEmergencyColorAvailable: Bool { get }
     func toggleEmergencyColor()
 }
 
@@ -37,6 +40,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
     private var emergencyHotKey: GlobalHotKey?
 
     var isEmergencyColorActive: Bool { emergencyColorEndDate != nil }
+
+    /// Something is currently filtering the screen, so there's a point to Emergency
+    /// Color: colour/dim on (manual master, or an active schedule) OR grayscale on.
+    var isEmergencyColorAvailable: Bool {
+        let prefs = PreferencesStore.shared
+        let colourActive = prefs.scheduleEnabled
+            ? circadianEngine.currentTarget.active
+            : prefs.masterEnabled
+        return colourActive || grayscaleEngine.isGrayscaleEnabled()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -117,10 +130,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
     /// everything; otherwise the schedule (if on) or the manual sliders drive.
     private func applyEffectiveState() {
         if isEmergencyColorActive {
-            // Full colour: no gamma tint, no dim, no grayscale — real colours now.
+            // Full colour: no gamma tint, no dim. Grayscale is handled once on the
+            // activate/cancel transitions (below), NOT here — so the 30s schedule
+            // tick can't re-toggle it and spam the bezel.
             _ = gammaEngine.apply(enabled: false, warmth: 0, dim: 0)
             overlayEngine.apply(enabled: false, warmth: 0, dim: 0)
-            if grayscaleEngine.isGrayscaleEnabled() { grayscaleEngine.setGrayscale(false) }
             return
         }
         let prefs = PreferencesStore.shared
@@ -165,14 +179,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
 
     func toggleEmergencyColor() {
         if isEmergencyColorActive { cancelEmergencyColor() }
-        else { activateEmergencyColor() }
+        else if isEmergencyColorAvailable { activateEmergencyColor() }
+        // Nothing filtered → nothing to suspend; button/hotkey do nothing.
     }
 
     func activateEmergencyColor(seconds: TimeInterval = AppDelegate.emergencyColorDuration) {
-        if !isEmergencyColorActive {
-            // Remember grayscale so it can be restored when the window ends.
-            grayscaleBeforeEmergency = grayscaleEngine.isGrayscaleEnabled()
-        }
+        let firstActivation = !isEmergencyColorActive
+        // Mark active FIRST so any change notification (e.g. from dropping grayscale
+        // below) already resolves through the emergency branch.
         emergencyColorEndDate = Date().addingTimeInterval(seconds)
         emergencyColorTimer?.invalidate()
         let t = Timer(timeInterval: seconds, target: self,
@@ -180,6 +194,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
                       userInfo: nil, repeats: false)
         RunLoop.main.add(t, forMode: .common)
         emergencyColorTimer = t
+        if firstActivation {
+            // Remember grayscale, then drop it for real colours. Recorded once so a
+            // re-arm can't overwrite it; restored verbatim on cancel.
+            grayscaleBeforeEmergency = grayscaleEngine.isGrayscaleEnabled()
+            if grayscaleBeforeEmergency { grayscaleEngine.setGrayscale(false) }
+        }
         applyEffectiveState()
         NotificationCenter.default.post(name: Self.emergencyColorChanged, object: nil)
     }
@@ -191,16 +211,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
         emergencyColorTimer?.invalidate()
         emergencyColorTimer = nil
         emergencyColorEndDate = nil
-        // Let the schedule re-assert its own grayscale on the next evaluation.
-        scheduledGrayscale = nil
-        applyEffectiveState()
-        // Manual mode doesn't reassert grayscale itself, so restore the pre-emergency
-        // choice here (edge-triggered — only touch the system if it differs, so no
-        // spurious bezel). In schedule mode applyEffectiveState already restored it.
-        if !PreferencesStore.shared.scheduleEnabled,
-           grayscaleEngine.isGrayscaleEnabled() != grayscaleBeforeEmergency {
-            grayscaleEngine.setGrayscale(grayscaleBeforeEmergency)
+        // Restore grayscale to exactly what it was before — unconditionally, so a
+        // laggy system-state read can't lose it. If WE turned it off, turn it back on.
+        if grayscaleBeforeEmergency {
+            grayscaleEngine.setGrayscale(true)
         }
+        // Keep the schedule's edge-trigger consistent with the grayscale we just
+        // restored, so its next tick doesn't fight it.
+        scheduledGrayscale = grayscaleBeforeEmergency ? true : nil
+        applyEffectiveState()   // colour/dim back for the underlying mode
         NotificationCenter.default.post(name: Self.emergencyColorChanged, object: nil)
     }
 
