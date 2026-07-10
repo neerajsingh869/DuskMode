@@ -39,6 +39,12 @@ final class PopoverViewController: NSViewController {
 
     private let bedtimeTitle = NSTextField(labelWithString: "Bedtime")
     private let grayscaleTitle = NSTextField(labelWithString: "Grayscale")
+
+    /// Root vertical stack + the two Auto-only rows. These are *inserted* into the stack
+    /// only in Auto and *removed* otherwise — hiding alone left dead space at the bottom
+    /// because the popover's fittingSize didn't reliably reclaim a collapsed row's height.
+    private var stack: NSStackView!
+    private var bedtimeRow: NSStackView!
     private let warmthTitle = NSTextField(labelWithString: "Warmth")
     private let warmthValue = NSTextField(labelWithString: "")
     private let dimTitle = NSTextField(labelWithString: "Dimming")
@@ -93,7 +99,7 @@ final class PopoverViewController: NSViewController {
         bedtimePicker.target = self
         bedtimePicker.action = #selector(bedtimeChanged)
         bedtimePicker.toolTip = "Wind-down deepens toward this time; grayscale starts 2 h before"
-        let bedtimeRow = row(leading: bedtimeTitle, trailing: bedtimePicker)
+        bedtimeRow = row(leading: bedtimeTitle, trailing: bedtimePicker)
 
         scheduleStatus.font = .systemFont(ofSize: 11)
         scheduleStatus.textColor = .secondaryLabelColor
@@ -152,13 +158,14 @@ final class PopoverViewController: NSViewController {
         let warmthRow = row(leading: warmthTitle, trailing: warmthValue)
         let dimRow = row(leading: dimTitle, trailing: dimValue)
 
-        let stack = NSStackView(views: [
+        // The two Auto-only rows (bedtimeRow, scheduleStatus) are NOT in the initial
+        // array — updateAutoRows(for:) inserts them after modeControl only in Auto and
+        // removes them otherwise, so the popover never reserves their height in Off/Manual.
+        stack = NSStackView(views: [
             headerRow,
             subtitle,
             separator1,
             modeControl,
-            bedtimeRow,
-            scheduleStatus,
             separator2,
             warmthRow,
             warmthSlider,
@@ -181,9 +188,9 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(2, after: headerRow)
         stack.setCustomSpacing(12, after: subtitle)
         stack.setCustomSpacing(12, after: separator1)
-        stack.setCustomSpacing(10, after: modeControl)
-        stack.setCustomSpacing(6, after: bedtimeRow)
-        stack.setCustomSpacing(12, after: scheduleStatus)
+        // Spacing after modeControl is 12 in Off/Manual (straight to separator2); Auto
+        // overrides it to 10 and adds the bedtime/status spacing in updateAutoRows.
+        stack.setCustomSpacing(12, after: modeControl)
         stack.setCustomSpacing(12, after: separator2)
         stack.setCustomSpacing(4, after: warmthRow)
         stack.setCustomSpacing(14, after: warmthSlider)
@@ -261,10 +268,10 @@ final class PopoverViewController: NSViewController {
         updateEnabledStates()
         updateScheduleStatus()
         updateEmergencyButton()
-        // Bedtime + status are only meaningful in Auto — collapse them otherwise.
-        bedtimePicker.superview?.isHidden = (mode != .auto)
-        scheduleStatus.isHidden = (mode != .auto)
-        // Re-fit AFTER the hide takes effect so the popover hugs its content (no dead
+        // Bedtime + status are only meaningful in Auto — insert/remove them (not just
+        // hide) so the popover reclaims their height and hugs its content in Off/Manual.
+        updateAutoRows(for: mode)
+        // Re-fit AFTER the change takes effect so the popover hugs its content (no dead
         // space) — fittingSize is stale until the layout pass runs.
         view.layoutSubtreeIfNeeded()
         preferredContentSize = view.fittingSize
@@ -364,6 +371,28 @@ final class PopoverViewController: NSViewController {
         scheduleStatus.stringValue = text
     }
 
+    /// Inserts the bedtime + schedule-status rows after modeControl in Auto, removes them
+    /// otherwise. Removing (not hiding) is what lets the popover shrink to fit its content.
+    private func updateAutoRows(for mode: PreferencesStore.Mode) {
+        let shouldShow = (mode == .auto)
+        let present = (bedtimeRow.superview != nil)
+        guard shouldShow != present else { return }
+        if shouldShow {
+            guard let anchor = stack.arrangedSubviews.firstIndex(of: modeControl) else { return }
+            stack.insertArrangedSubview(bedtimeRow, at: anchor + 1)
+            stack.insertArrangedSubview(scheduleStatus, at: anchor + 2)
+            stack.setCustomSpacing(10, after: modeControl)
+            stack.setCustomSpacing(6, after: bedtimeRow)
+            stack.setCustomSpacing(12, after: scheduleStatus)
+        } else {
+            stack.removeArrangedSubview(bedtimeRow)
+            bedtimeRow.removeFromSuperview()
+            stack.removeArrangedSubview(scheduleStatus)
+            scheduleStatus.removeFromSuperview()
+            stack.setCustomSpacing(12, after: modeControl)
+        }
+    }
+
     // MARK: - Actions
 
     @objc private func modeChanged() {
@@ -425,8 +454,7 @@ final class PopoverViewController: NSViewController {
         prefs.mode = .manual
         modeControl.selectedSegment = Self.segment(for: .manual)
         updateEnabledStates()
-        bedtimePicker.superview?.isHidden = true
-        scheduleStatus.isHidden = true
+        updateAutoRows(for: .manual)
         view.layoutSubtreeIfNeeded()
         preferredContentSize = view.fittingSize
     }
