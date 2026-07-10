@@ -15,9 +15,13 @@ protocol ScreenStateControlling: AnyObject {
     var grayscaleSuspendedForEmergency: Bool { get }
     func toggleEmergencyColor()
     /// The user tapped the grayscale switch (or Reset). Marks grayscale as a manual,
-    /// independent peer (not schedule-owned) so it survives a later master/schedule off,
-    /// and edge-guards the system toggle so an unchanged state fires no stray bezel.
+    /// independent peer (not schedule-owned) so it survives a later mode change, and
+    /// edge-guards the system toggle so an unchanged state fires no stray bezel.
     func setManualGrayscale(_ enabled: Bool)
+    /// A slider handoff (Auto → Manual keeping the current look) transfers ownership of
+    /// the currently-on grayscale to manual, WITHOUT touching the system — so leaving
+    /// Auto doesn't release it. Call this BEFORE switching the mode to manual.
+    func retainGrayscaleAsManual()
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling {
@@ -67,19 +71,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     var grayscaleSuspendedForEmergency: Bool { isEmergencyColorActive && grayscaleBeforeEmergency }
 
     /// Something is currently filtering the screen, so there's a point to Emergency
-    /// Color: colour/dim on (manual master, or an active schedule) OR grayscale on.
+    /// Color: colour/dim on (manual, or an active schedule) OR grayscale on.
     var isEmergencyColorAvailable: Bool {
-        let prefs = PreferencesStore.shared
-        let colourActive = prefs.scheduleEnabled
-            ? circadianEngine.currentTarget.active
-            : prefs.masterEnabled
+        let colourActive: Bool
+        switch PreferencesStore.shared.mode {
+        case .auto:   colourActive = circadianEngine.currentTarget.active
+        case .manual: colourActive = true
+        case .off:    colourActive = false
+        }
         return colourActive || grayscaleEngine.isGrayscaleEnabled()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        setupStatusItem()
-        setupPopover()
-
         // Every tick re-evaluates through the single choke point so an active
         // Emergency Color override always wins over the schedule.
         circadianEngine.onTarget = { [weak self] _ in
@@ -88,6 +91,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         NotificationCenter.default.addObserver(
             self, selector: #selector(preferencesChanged),
             name: PreferencesStore.didChange, object: nil)
+
+        setupStatusItem()
+        setupPopover()
 
         // Global shortcut → Emergency Color. Public Carbon hotkey (⌥⌘C), no
         // Accessibility permission needed. Nil if the combo is already taken.
@@ -134,44 +140,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     // MARK: - Reacting to preference changes
 
     @objc private func preferencesChanged() {
-        let prefs = PreferencesStore.shared
-        if prefs.scheduleEnabled {
+        let mode = PreferencesStore.shared.mode
+        if mode == .auto {
             // The circadian schedule owns the screen: (re)start it. Its target flows
             // through onTarget → applyEffectiveState. Manual values are ignored.
             circadianEngine.setEnabled(true)
         } else if circadianEngine.isEnabled {
-            // Schedule just turned off — it no longer drives grayscale. WHY it turned
-            // off matters: a seamless slider handoff keeps filtering (masterEnabled stays
-            // on) and should KEEP the grayscale, while turning DuskMode fully off should
-            // release it. releaseAutoGrayscaleIfIdle() decides that below — here we only
-            // drop the schedule's edge-trigger ownership marker.
+            // Just LEFT Auto. The schedule no longer drives grayscale — release the
+            // grayscale it owned so leaving Auto reverts what Auto did (REGRESSIONS #16).
+            // The one exception is a slider handoff (Auto → Manual keeping the current
+            // look): that path calls retainGrayscaleAsManual() FIRST, clearing
+            // grayscaleFromSchedule, so it isn't released here. Skipped during an
+            // emergency (grayscale is momentarily off then; cancel restores it).
             circadianEngine.setEnabled(false)
             scheduledGrayscale = nil
+            if grayscaleFromSchedule, !isEmergencyColorActive, grayscaleEngine.isGrayscaleEnabled() {
+                grayscaleEngine.setGrayscale(false)
+            }
+            grayscaleFromSchedule = false
         }
-        releaseAutoGrayscaleIfIdle()
+        // NOTE: grayscale is a fully independent behavioral tool (REGRESSIONS #17) —
+        // available in ANY mode, including Off. A grayscale the user toggled by hand is
+        // NEVER swept by a mode change (only its own toggle or app quit turns it off);
+        // only the schedule's own grayscale is released, above, when leaving Auto.
         applyEffectiveState()
-    }
-
-    /// If the screen has returned FULLY to normal (no schedule, master off) and the
-    /// grayscale currently on was one WE turned on automatically (schedule, or inherited
-    /// via a slider handoff), release it — so "off" is a genuinely normal screen, not
-    /// stuck gray (REGRESSIONS #14). A grayscale the user toggled BY HAND
-    /// (`grayscaleFromSchedule == false`) is an independent peer and is left alone
-    /// (REGRESSIONS #15). Skipped during an emergency (grayscale is momentarily off then;
-    /// cancelEmergencyColor restores the correct state). Edge-guarded so no stray bezel.
-    private func releaseAutoGrayscaleIfIdle() {
-        let prefs = PreferencesStore.shared
-        guard !prefs.scheduleEnabled, !prefs.masterEnabled, !isEmergencyColorActive else { return }
-        if grayscaleFromSchedule, grayscaleEngine.isGrayscaleEnabled() {
-            grayscaleEngine.setGrayscale(false)
-        }
-        grayscaleFromSchedule = false
     }
 
     // MARK: - Apply choke point
 
     /// The single place the screen state is decided. Emergency Color overrides
-    /// everything; otherwise the schedule (if on) or the manual sliders drive.
+    /// everything; otherwise the current mode (auto / manual / off) drives.
     private func applyEffectiveState() {
         if isEmergencyColorActive {
             // Full colour: no gamma tint, no dim. Grayscale is handled once on the
@@ -182,25 +180,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
             return
         }
         let prefs = PreferencesStore.shared
-        if prefs.scheduleEnabled {
-            applyScheduleTarget(circadianEngine.currentTarget)
-        } else {
-            applyManual(prefs)
+        switch prefs.mode {
+        case .auto:   applyScheduleTarget(circadianEngine.currentTarget)
+        case .manual: applyFilters(enabled: true, warmth: prefs.warmth, dim: prefs.dim)
+        case .off:    applyFilters(enabled: false, warmth: 0, dim: 0)
         }
     }
 
-    /// The Phase-1 manual path: master switch + sliders.
-    private func applyManual(_ prefs: PreferencesStore) {
-        // Gamma carries BOTH colour and dim whenever it works: it isn't a window, so
-        // it can never flash during app switches (REGRESSIONS.md #9). Only when gamma
-        // is unavailable (newest-Apple-Silicon regression) does the overlay window
-        // exist at all, carrying both layers with the same blackbody hue.
-        let gammaHandlesFilters = gammaEngine.apply(enabled: prefs.masterEnabled,
-                                                    warmth: prefs.warmth,
-                                                    dim: prefs.dim)
-        overlayEngine.apply(enabled: prefs.masterEnabled && !gammaHandlesFilters,
-                            warmth: prefs.warmth,
-                            dim: prefs.dim)
+    /// Drive colour+dim through the engines. Gamma carries BOTH whenever it works: it
+    /// isn't a window, so it can never flash during app switches (REGRESSIONS.md #9).
+    /// Only when gamma is unavailable (newest-Apple-Silicon regression) does the overlay
+    /// window exist at all, carrying both layers with the same blackbody hue.
+    private func applyFilters(enabled: Bool, warmth: Double, dim: Double) {
+        let gammaHandlesFilters = gammaEngine.apply(enabled: enabled, warmth: warmth, dim: dim)
+        overlayEngine.apply(enabled: enabled && !gammaHandlesFilters, warmth: warmth, dim: dim)
     }
 
     /// The Phase-2 automatic path: same engines, values from the timeline.
@@ -241,6 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         if grayscaleEngine.isGrayscaleEnabled() != enabled {
             grayscaleEngine.setGrayscale(enabled)
         }
+    }
+
+    /// Transfer ownership of the current grayscale to manual without touching the system,
+    /// so a following Auto → Manual mode change keeps it instead of releasing it.
+    func retainGrayscaleAsManual() {
+        grayscaleFromSchedule = false
     }
 
     func activateEmergencyColor(seconds: TimeInterval = AppDelegate.emergencyColorDuration) {

@@ -1,20 +1,18 @@
 import AppKit
 import DuskModeCore
 
-/// The menu-bar popover: automatic schedule (switch + bedtime + status), master
-/// switch, warmth + dim sliders, grayscale toggle.
+/// The menu-bar popover: an Off / Manual / Auto mode selector, bedtime + live status
+/// (Auto), warmth + dim sliders, a grayscale toggle, Emergency Color, and Reset.
 /// Built programmatically (no .xib) so the whole app stays plain-text and buildable
 /// without Xcode's Interface Builder.
 ///
-/// Layout follows macOS control-panel conventions (Wi-Fi/Bluetooth menu extras):
-/// one title row with the master switch, labelled sliders with live value readouts
-/// (Kelvin, like f.lux, so the numbers are meaningful), switches instead of buttons
-/// for on/off state, and controls that visibly disable when nothing is active.
-///
-/// Mode model: when "Automatic schedule" is ON, the circadian timeline owns the
-/// screen — the master switch and sliders display what the schedule is currently
-/// doing, and touching any of them adopts those values into manual mode and turns
-/// the schedule off (a seamless handoff, no visual jump).
+/// Mode model (one control, three states — replaces the old master + schedule switches):
+///  • Off    — screen untouched.
+///  • Manual — the warmth/dim sliders drive; grayscale is an independent toggle.
+///  • Auto   — the circadian timeline drives warmth/dim/grayscale; sliders show live
+///             values. Dragging a slider in Auto forks to Manual keeping the current
+///             look (grayscale included); clicking Manual/Off instead turns Auto's
+///             grayscale off (see AppDelegate — REGRESSIONS #16).
 final class PopoverViewController: NSViewController {
 
     private let overlayEngine: OverlayEngine
@@ -29,8 +27,9 @@ final class PopoverViewController: NSViewController {
     private static let contentWidth: CGFloat = 300
     private static let insets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
 
-    private let masterSwitch = NSSwitch()
-    private let scheduleSwitch = NSSwitch()
+    private let modeControl = NSSegmentedControl(labels: ["Off", "Manual", "Auto"],
+                                                 trackingMode: .selectOne,
+                                                 target: nil, action: nil)
     private let bedtimePicker = NSDatePicker()
     private let scheduleStatus = NSTextField(wrappingLabelWithString: "")
     private let warmthSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
@@ -39,6 +38,7 @@ final class PopoverViewController: NSViewController {
     private let emergencyButton = NSButton(title: "", target: nil, action: nil)
 
     private let bedtimeTitle = NSTextField(labelWithString: "Bedtime")
+    private let grayscaleTitle = NSTextField(labelWithString: "Grayscale")
     private let warmthTitle = NSTextField(labelWithString: "Warmth")
     private let warmthValue = NSTextField(labelWithString: "")
     private let dimTitle = NSTextField(labelWithString: "Dimming")
@@ -61,24 +61,30 @@ final class PopoverViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        // Header: app name + master switch on one row, tagline beneath.
+        // Header: app name (left) + a subtle "Reset" text link (right), tagline beneath.
         let title = NSTextField(labelWithString: "DuskMode")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
-        masterSwitch.target = self
-        masterSwitch.action = #selector(masterChanged)
-        let headerRow = row(leading: title, trailing: masterSwitch)
+        let resetButton = NSButton(title: "Reset", target: self, action: #selector(resetTapped))
+        resetButton.isBordered = false
+        resetButton.bezelStyle = .inline
+        resetButton.font = .systemFont(ofSize: 11)
+        resetButton.contentTintColor = .secondaryLabelColor
+        resetButton.setContentHuggingPriority(.required, for: .horizontal)
+        resetButton.toolTip =
+            "Restore the original settings: 3500 K, no dimming, grayscale off, bedtime 23:00. The Off/Manual/Auto mode is left alone."
+        let headerRow = row(leading: title, trailing: resetButton)
 
         let subtitle = NSTextField(labelWithString: "Science-based evening wind-down")
         subtitle.font = .systemFont(ofSize: 11)
         subtitle.textColor = .secondaryLabelColor
 
-        // Automatic schedule: switch row, bedtime picker row, live status caption.
-        let scheduleTitle = NSTextField(labelWithString: "Automatic schedule")
-        scheduleTitle.font = .systemFont(ofSize: 13)
-        scheduleSwitch.target = self
-        scheduleSwitch.action = #selector(scheduleChanged)
-        let scheduleRow = row(leading: scheduleTitle, trailing: scheduleSwitch)
+        // Mode selector: Off / Manual / Auto — the single top-level state.
+        modeControl.segmentDistribution = .fillEqually
+        modeControl.target = self
+        modeControl.action = #selector(modeChanged)
+        modeControl.toolTip = "Off = screen untouched · Manual = you set warmth/dim · Auto = follows the wind-down schedule"
 
+        // Bedtime (Auto only): the timeline deepens toward this time.
         bedtimeTitle.font = .systemFont(ofSize: 13)
         bedtimePicker.datePickerStyle = .textFieldAndStepper
         bedtimePicker.datePickerElements = .hourMinute
@@ -111,18 +117,19 @@ final class PopoverViewController: NSViewController {
         dimSlider.toolTip = "Darkens the screen below the hardware brightness minimum"
 
         // Grayscale: switch row + explanatory caption.
-        let grayscaleTitle = NSTextField(labelWithString: "Grayscale")
         grayscaleTitle.font = .systemFont(ofSize: 13)
         grayscaleSwitch.target = self
         grayscaleSwitch.action = #selector(grayscaleChanged)
         let grayscaleRow = row(leading: grayscaleTitle, trailing: grayscaleSwitch)
 
         let grayscaleCaption = NSTextField(wrappingLabelWithString:
-            "Turns the whole screen black-and-white to make endless scrolling less gripping. macOS briefly shows its Colour Filters confirmation.")
+            "Drains colour so scrolling feels less gripping.")
         grayscaleCaption.font = .systemFont(ofSize: 11)
         grayscaleCaption.textColor = .secondaryLabelColor
         grayscaleCaption.preferredMaxLayoutWidth = Self.contentWidth
         grayscaleCaption.isSelectable = false
+        grayscaleSwitch.toolTip =
+            "A separate anti-doomscroll tool — available in any mode. Auto turns it on near bedtime. macOS briefly shows its Colour Filters confirmation on toggle."
 
         // Emergency Color: a momentary "real colours NOW" override. Suspends every
         // filter for 60s, then the wind-down (manual or schedule) resumes on its own.
@@ -130,29 +137,18 @@ final class PopoverViewController: NSViewController {
         emergencyButton.controlSize = .regular
         emergencyButton.target = self
         emergencyButton.action = #selector(emergencyTapped)
-        emergencyButton.toolTip = "Suspend all filters for 60 seconds, then auto-resume. Shortcut: ⌥⌘C"
+        emergencyButton.toolTip = "Restore true colour for 60 seconds — for when you need accurate colours — then your wind-down resumes automatically. Shortcut: ⌥⌘C."
         let emergencyCaption = NSTextField(wrappingLabelWithString:
-            "Instantly restores true colour for 60 seconds — for when you need accurate colours — then your wind-down resumes automatically. Shortcut: ⌥⌘C.")
+            "True colour for 60 s, then resumes. ⌥⌘C")
         emergencyCaption.font = .systemFont(ofSize: 11)
         emergencyCaption.textColor = .secondaryLabelColor
         emergencyCaption.preferredMaxLayoutWidth = Self.contentWidth
         emergencyCaption.isSelectable = false
 
-        // Reset: one click back to first-launch values (warmth 3500 K, no dimming,
-        // grayscale off, bedtime 23:00). Master/schedule switches stay as they are.
-        let resetButton = NSButton(title: "Reset to Defaults",
-                                   target: self, action: #selector(resetTapped))
-        resetButton.bezelStyle = .rounded
-        resetButton.controlSize = .small
-        resetButton.font = .systemFont(ofSize: 11)
-        resetButton.toolTip =
-            "Back to the original settings: 3500 K, no dimming, grayscale off, bedtime 23:00. On/off switches are left alone."
-
         let separator1 = separator()
         let separator2 = separator()
         let separator3 = separator()
         let separator4 = separator()
-        let separator5 = separator()
         let warmthRow = row(leading: warmthTitle, trailing: warmthValue)
         let dimRow = row(leading: dimTitle, trailing: dimValue)
 
@@ -160,7 +156,7 @@ final class PopoverViewController: NSViewController {
             headerRow,
             subtitle,
             separator1,
-            scheduleRow,
+            modeControl,
             bedtimeRow,
             scheduleStatus,
             separator2,
@@ -173,9 +169,7 @@ final class PopoverViewController: NSViewController {
             grayscaleCaption,
             separator4,
             emergencyButton,
-            emergencyCaption,
-            separator5,
-            resetButton
+            emergencyCaption
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -187,7 +181,7 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(2, after: headerRow)
         stack.setCustomSpacing(12, after: subtitle)
         stack.setCustomSpacing(12, after: separator1)
-        stack.setCustomSpacing(8, after: scheduleRow)
+        stack.setCustomSpacing(10, after: modeControl)
         stack.setCustomSpacing(6, after: bedtimeRow)
         stack.setCustomSpacing(12, after: scheduleStatus)
         stack.setCustomSpacing(12, after: separator2)
@@ -200,8 +194,6 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(12, after: grayscaleCaption)
         stack.setCustomSpacing(10, after: separator4)
         stack.setCustomSpacing(6, after: emergencyButton)
-        stack.setCustomSpacing(12, after: emergencyCaption)
-        stack.setCustomSpacing(10, after: separator5)
 
         root.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -212,7 +204,7 @@ final class PopoverViewController: NSViewController {
             root.widthAnchor.constraint(
                 equalToConstant: Self.contentWidth + Self.insets.left + Self.insets.right)
         ])
-        for wide in [warmthSlider, dimSlider, emergencyButton] as [NSView] {
+        for wide in [modeControl, warmthSlider, dimSlider, emergencyButton] as [NSView] {
             wide.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         }
         for caption in [scheduleStatus, grayscaleCaption, emergencyCaption] {
@@ -228,9 +220,6 @@ final class PopoverViewController: NSViewController {
         super.viewWillAppear()
         syncFromState()
         startEmergencyCountdownIfNeeded()
-        // The status caption's length varies (phase names, times) — re-fit so the
-        // popover never clips it.
-        preferredContentSize = view.fittingSize
     }
 
     override func viewWillDisappear() {
@@ -241,25 +230,30 @@ final class PopoverViewController: NSViewController {
 
     // MARK: - Sync
 
-    /// True when the screen is currently filtered — by schedule or by hand.
+    /// True when the screen is currently filtered — in Manual, or an active Auto phase.
     private var filtersActive: Bool {
-        prefs.scheduleEnabled ? circadianEngine.currentTarget.active : prefs.masterEnabled
+        switch prefs.mode {
+        case .auto:   return circadianEngine.currentTarget.active
+        case .manual: return true
+        case .off:    return false
+        }
     }
 
     private func syncFromState() {
         let target = circadianEngine.currentTarget
-        let scheduleOn = prefs.scheduleEnabled
+        let mode = prefs.mode
 
-        scheduleSwitch.state = scheduleOn ? .on : .off
+        modeControl.selectedSegment = Self.segment(for: mode)
         bedtimePicker.dateValue = Self.date(fromMinutes: prefs.bedtimeMinutes)
-        masterSwitch.state = filtersActive ? .on : .off
-        warmthSlider.doubleValue = (scheduleOn && target.active) ? target.warmth : prefs.warmth
-        dimSlider.doubleValue = (scheduleOn && target.active) ? target.dim : prefs.dim
+        // In Auto, the sliders display the schedule's live values; otherwise the manual prefs.
+        let showLive = (mode == .auto && target.active)
+        warmthSlider.doubleValue = showLive ? target.warmth : prefs.warmth
+        dimSlider.doubleValue = showLive ? target.dim : prefs.dim
         // Reflect grayscale INTENT, not the momentary system state. `prefs.grayscaleOn`
         // is the intent (every setGrayscale writes it) and, unlike the live UA getter,
         // never lags right after a set — so the switch can't show ON while the screen is
-        // colour (the bug Neeraj hit 2026-07-09). During an emergency the system grayscale
-        // is suppressed but the setting is intact, so OR the switch back ON.
+        // colour. During an emergency the system grayscale is suppressed but the setting
+        // is intact, so OR the switch back ON.
         let grayscaleOn = prefs.grayscaleOn
             || (emergencyController?.grayscaleSuspendedForEmergency ?? false)
         grayscaleSwitch.state = grayscaleOn ? .on : .off
@@ -267,6 +261,13 @@ final class PopoverViewController: NSViewController {
         updateEnabledStates()
         updateScheduleStatus()
         updateEmergencyButton()
+        // Bedtime + status are only meaningful in Auto — collapse them otherwise.
+        bedtimePicker.superview?.isHidden = (mode != .auto)
+        scheduleStatus.isHidden = (mode != .auto)
+        // Re-fit AFTER the hide takes effect so the popover hugs its content (no dead
+        // space) — fittingSize is stale until the layout pass runs.
+        view.layoutSubtreeIfNeeded()
+        preferredContentSize = view.fittingSize
     }
 
     /// Reflects Emergency Color state: idle = "Emergency Color", active = a live
@@ -326,21 +327,22 @@ final class PopoverViewController: NSViewController {
     }
 
     private func updateEnabledStates() {
-        let on = filtersActive
-        for control in [warmthSlider, dimSlider] { control.isEnabled = on }
+        let mode = prefs.mode
+        // Warmth/dim belong to the colour wind-down, so they're inert in Off.
+        let filtersOn = (mode != .off)
+        for control in [warmthSlider, dimSlider] { control.isEnabled = filtersOn }
         for label in [warmthTitle, warmthValue, dimTitle, dimValue] {
-            label.alphaValue = on ? 1.0 : 0.4
+            label.alphaValue = filtersOn ? 1.0 : 0.4
         }
-        bedtimePicker.isEnabled = prefs.scheduleEnabled
-        bedtimeTitle.alphaValue = prefs.scheduleEnabled ? 1.0 : 0.4
+        // Grayscale is a separate behavioral tool — always available, even in Off.
+        grayscaleSwitch.isEnabled = true
+        grayscaleTitle.alphaValue = 1.0
+        bedtimePicker.isEnabled = (mode == .auto)
+        bedtimeTitle.alphaValue = (mode == .auto) ? 1.0 : 0.4
     }
 
     private func updateScheduleStatus() {
-        guard prefs.scheduleEnabled else {
-            scheduleStatus.stringValue =
-                "Runs the whole wind-down for you: warm at sunset, grayscale and deep red as bedtime nears, off at sunrise."
-            return
-        }
+        guard prefs.mode == .auto else { return }
         let target = circadianEngine.currentTarget
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -364,8 +366,16 @@ final class PopoverViewController: NSViewController {
 
     // MARK: - Actions
 
-    @objc private func scheduleChanged() {
-        prefs.scheduleEnabled = (scheduleSwitch.state == .on)
+    @objc private func modeChanged() {
+        let newMode = Self.mode(forSegment: modeControl.selectedSegment)
+        // Leaving Auto for Manual explicitly: carry the current warmth/dim so there's no
+        // visual jump. Grayscale is NOT retained here — an explicit leave-Auto turns it
+        // off (AppDelegate releases the schedule-owned grayscale). A slider drag is the
+        // path that keeps grayscale (see forkToManualIfAuto).
+        if newMode == .manual, prefs.mode == .auto {
+            adoptCurrentScheduleValues()
+        }
+        prefs.mode = newMode
         syncFromState()
     }
 
@@ -374,40 +384,23 @@ final class PopoverViewController: NSViewController {
         syncFromState()
     }
 
-    @objc private func masterChanged() {
-        let wantOn = (masterSwitch.state == .on)
-        // Order matters for a flicker-free handoff: park the manual master state
-        // first (a no-op while the schedule still owns the screen), then release
-        // the schedule so the manual path applies exactly that state.
-        prefs.masterEnabled = wantOn
-        if prefs.scheduleEnabled {
-            if wantOn {
-                // Master flipped on during daytime: keep the current manual sliders.
-                adoptScheduleValuesIfActive()
-            }
-            prefs.scheduleEnabled = false
-        }
-        syncFromState()
-    }
-
     @objc private func warmthChanged() {
-        handOffToManualIfScheduled()
+        forkToManualIfAuto()
         prefs.warmth = warmthSlider.doubleValue
         updateValueLabels()
     }
 
     @objc private func dimChanged() {
-        handOffToManualIfScheduled()
+        forkToManualIfAuto()
         prefs.dim = dimSlider.doubleValue
         updateValueLabels()
     }
 
     @objc private func grayscaleChanged() {
         // Route through the controller so this is marked a MANUAL, independent peer —
-        // it won't be swept when the master/schedule later turns off (REGRESSIONS #15).
-        // Deliberately does NOT turn the schedule off: a manual grayscale flip is a
-        // momentary choice, and the schedule only re-asserts grayscale at the next
-        // phase boundary (edge-triggered in AppDelegate).
+        // it won't be swept when leaving Auto (REGRESSIONS #15/#16). Deliberately does
+        // NOT change the mode: a manual grayscale flip is a momentary choice, and Auto
+        // only re-asserts grayscale at the next phase boundary (edge-triggered).
         emergencyController?.setManualGrayscale(grayscaleSwitch.state == .on)
         // Grayscale alone makes Emergency Color meaningful, so refresh its enabled state.
         updateEmergencyButton()
@@ -416,29 +409,51 @@ final class PopoverViewController: NSViewController {
     @objc private func resetTapped() {
         // Turn system grayscale off (edge-guarded inside setManualGrayscale — no bezel
         // when it was already off) and mark it manual, then restore the pref knobs and
-        // refresh the whole UI.
+        // refresh the whole UI. The mode is left as-is.
         emergencyController?.setManualGrayscale(false)
         prefs.resetToDefaults()
         syncFromState()
     }
 
-    /// Dragging a slider while the schedule runs = switch to manual, keeping the
-    /// screen exactly as-is (adopt the schedule's current values first).
-    private func handOffToManualIfScheduled() {
-        guard prefs.scheduleEnabled else { return }
-        adoptScheduleValuesIfActive()
-        prefs.masterEnabled = true
-        prefs.scheduleEnabled = false
-        scheduleSwitch.state = .off
+    /// Dragging a slider while in Auto = fork to Manual, keeping the screen exactly
+    /// as-is (adopt the schedule's current values first) AND keeping grayscale (transfer
+    /// its ownership to manual so leaving Auto doesn't release it).
+    private func forkToManualIfAuto() {
+        guard prefs.mode == .auto else { return }
+        adoptCurrentScheduleValues()
+        emergencyController?.retainGrayscaleAsManual()
+        prefs.mode = .manual
+        modeControl.selectedSegment = Self.segment(for: .manual)
         updateEnabledStates()
-        updateScheduleStatus()
+        bedtimePicker.superview?.isHidden = true
+        scheduleStatus.isHidden = true
+        view.layoutSubtreeIfNeeded()
+        preferredContentSize = view.fittingSize
     }
 
-    private func adoptScheduleValuesIfActive() {
+    private func adoptCurrentScheduleValues() {
         let target = circadianEngine.currentTarget
         guard target.active else { return }
         prefs.warmth = target.warmth
         prefs.dim = target.dim
+    }
+
+    // MARK: - Mode ↔ segment mapping
+
+    private static func mode(forSegment index: Int) -> PreferencesStore.Mode {
+        switch index {
+        case 0:  return .off
+        case 1:  return .manual
+        default: return .auto
+        }
+    }
+
+    private static func segment(for mode: PreferencesStore.Mode) -> Int {
+        switch mode {
+        case .off:    return 0
+        case .manual: return 1
+        case .auto:   return 2
+        }
     }
 
     // MARK: - Bedtime ↔ Date conversion

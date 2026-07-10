@@ -12,12 +12,19 @@ final class PreferencesStore {
     /// Posted whenever any value changes so engines can react.
     static let didChange = Notification.Name("DuskMode.PreferencesDidChange")
 
+    /// The single top-level state, replacing the old master + schedule switches.
+    /// off = screen untouched · manual = warmth/dim sliders drive · auto = schedule drives.
+    enum Mode: String {
+        case off, manual, auto
+    }
+
     private enum Key {
-        static let masterEnabled = "masterEnabled"
+        static let mode = "mode"
+        static let masterEnabled = "masterEnabled"     // legacy — read only for migration
         static let warmth = "warmth"
         static let dim = "dim"
         static let grayscaleOn = "grayscaleOn"
-        static let scheduleEnabled = "scheduleEnabled"
+        static let scheduleEnabled = "scheduleEnabled" // legacy — read only for migration
         static let bedtimeMinutes = "bedtimeMinutes"
         static let cachedLatitude = "cachedLatitude"
         static let cachedLongitude = "cachedLongitude"
@@ -33,13 +40,10 @@ final class PreferencesStore {
     }
 
     private init() {
-        // Master and schedule start off until the user opts in.
         defaults.register(defaults: [
-            Key.masterEnabled: false,
             Key.warmth: Default.warmth,
             Key.dim: Default.dim,
             Key.grayscaleOn: false,
-            Key.scheduleEnabled: false,
             Key.bedtimeMinutes: Default.bedtimeMinutes
         ])
     }
@@ -55,10 +59,18 @@ final class PreferencesStore {
         notify()
     }
 
-    /// Master on/off for the whole filtering stack.
-    var masterEnabled: Bool {
-        get { defaults.bool(forKey: Key.masterEnabled) }
-        set { defaults.set(newValue, forKey: Key.masterEnabled); notify() }
+    /// The single top-level state. Migrates once from the old master/schedule switches
+    /// so an existing install resumes in the equivalent mode.
+    var mode: Mode {
+        get {
+            if let raw = defaults.string(forKey: Key.mode), let m = Mode(rawValue: raw) {
+                return m
+            }
+            if defaults.bool(forKey: Key.scheduleEnabled) { return .auto }
+            if defaults.bool(forKey: Key.masterEnabled) { return .manual }
+            return .off
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.mode); notify() }
     }
 
     /// 0.0 = neutral/amber, 1.0 = deep red. Drives the overlay tint.
@@ -77,14 +89,6 @@ final class PreferencesStore {
     var grayscaleOn: Bool {
         get { defaults.bool(forKey: Key.grayscaleOn) }
         set { defaults.set(newValue, forKey: Key.grayscaleOn); notify() }
-    }
-
-    /// Whether the automatic circadian schedule is driving the filters.
-    /// While true, manual warmth/dim/master values are ignored (schedule wins);
-    /// any manual adjustment in the UI flips this back to false.
-    var scheduleEnabled: Bool {
-        get { defaults.bool(forKey: Key.scheduleEnabled) }
-        set { defaults.set(newValue, forKey: Key.scheduleEnabled); notify() }
     }
 
     /// Target bedtime as minutes after midnight (0…1439). Values before noon are

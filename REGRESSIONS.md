@@ -249,12 +249,61 @@
   releaseAutoGrayscaleIfIdle / applyScheduleTarget / setManualGrayscale (9 scenario checks
   incl. the exact bug A2, #14's C1, and manual-peer B2/D1 — all pass, no real bezels).
 
+## 16. Off/Manual/Auto mode selector + grayscale released on LEAVING Auto (Phase 3)
+- **Symptom (Neeraj, 2026-07-10):** turning off the Automatic schedule (while the DuskMode
+  master switch was still on) left the schedule's grayscale ON. He expected leaving Auto to
+  undo what Auto did, grayscale included. Also: the two peer switches (master + schedule)
+  were confusing and were the root source of the grayscale-ownership bugs.
+- **Fix — two parts:**
+  1. **One `mode` (off/manual/auto)** replaces the master + schedule switches
+     (`PreferencesStore.Mode`, migrates from the legacy bools once). The popover top is an
+     `NSSegmentedControl`. `applyEffectiveState` switches on mode: auto → schedule, manual →
+     `applyFilters(enabled:true,…)`, off → `applyFilters(enabled:false,…)`.
+  2. **Grayscale released when LEAVING Auto**, not only when fully idle (supersedes #15's
+     master-gate). In `preferencesChanged`, the `else if circadianEngine.isEnabled` branch
+     (we just left Auto) releases `grayscaleFromSchedule`. The ONE exception is a slider-drag
+     handoff: dragging a slider in Auto calls `retainGrayscaleAsManual()` (clears
+     `grayscaleFromSchedule` without touching the system) BEFORE switching to Manual, so
+     that path keeps grayscale; clicking Manual/Off explicitly does not, so it's released.
+     (NOTE: the earlier "Off clears ALL grayscale" rule was REVERSED by #17 — a hand-toggled
+     grayscale now survives Off. Only the SCHEDULE's grayscale is released on leaving Auto.)
+- **Invariant:** leaving Auto reverts Auto's grayscale (it was auto-owned); a slider-drag
+  handoff is the only way it carries into Manual (via `retainGrayscaleAsManual`). A
+  hand-toggled grayscale is a peer, untouched by mode changes (see #17). Grayscale toggles
+  from the popover route through `setManualGrayscale` / `retainGrayscaleAsManual`; the
+  switch reads `prefs.grayscaleOn` intent (#13/#15).
+- **Re-check:** Auto in the grayscale phase → click **Manual** → grayscale OFF (warmth/dim
+  carried, no jump). Auto in the grayscale phase → **drag the Dim slider** → forks to
+  Manual, grayscale STAYS on. Verified 2026-07-10 via the injected recording-grayscale
+  double driving the real preferencesChanged path (A slider-fork keeps, B explicit Manual
+  releases, C Auto→Off releases the schedule's grayscale — all pass).
+
+## 17. Grayscale is an always-available independent tool (Phase 3, supersedes #16's Off-clear)
+- **Decision (Neeraj, 2026-07-10):** grayscale should be usable in ANY mode, including Off.
+  Rationale is scientific: grayscale is a *behavioral* intervention (less colour → less
+  dopamine/reward salience → less compulsive scrolling; the ~40 min/day phone-use finding,
+  emerging evidence) — a DIFFERENT pathway from warmth/dim's *physiological* melatonin
+  effect, and NOT time-locked. So it shouldn't be gated behind "the evening wind-down is on".
+- **Change:** the grayscale switch is always enabled (even in Off). The old "Off clears any
+  grayscale" branch in `preferencesChanged` was REMOVED — a hand-toggled grayscale now
+  survives every mode change (Off included) and is cleared only by its own toggle or app
+  quit (`shutdown`). Only the SCHEDULE's grayscale is still released, on leaving Auto (#16).
+- **Invariant:** grayscale availability is independent of mode; warmth/dim remain gated to
+  Manual/Auto (inert in Off). A hand-toggled grayscale is NEVER swept by a mode change.
+  Entering Auto lets the schedule assert its grayscale (daytime → off) — that's Auto taking
+  ownership, not a mode-sweep. On quit, grayscale is turned off (don't strand the user with
+  a system setting they can't easily undo).
+- **Re-check:** Off → the Grayscale switch is enabled; toggle it on → screen desaturates and
+  STAYS gray across Off/Manual switches; only its own toggle (or quitting DuskMode) clears it.
+  Verified 2026-07-10 (recording double: D2 hand grayscale survives Off, D3 survives
+  Off→Manual — pass).
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)
 1. `swift run DuskModeSelfTest` — all green.
 2. `./build.sh release run` — single process, icon appears.
-3. Manual mode: master on, warmth up → warm, blacks black; dim up → darkens.
-4. Schedule mode: switch on → status line correct; ⌘Tab flash check (#1);
-   grayscale phase → one bezel only (#4).
-5. Quit app → screen returns fully to normal.
+3. Manual mode: warmth up → warm, blacks black; dim up → darkens.
+4. Auto mode: status line correct; ⌘Tab flash check (#1);
+   grayscale phase → one bezel only (#4); leaving Auto reverts grayscale (#16).
+5. Off → screen fully normal, no grayscale. Quit app → screen returns fully to normal.
