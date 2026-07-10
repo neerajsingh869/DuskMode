@@ -215,6 +215,40 @@
   normal (no warmth, no gray), one bezel. Separately: schedule OFF, toggle grayscale on by
   hand, master off → grayscale STAYS on.
 
+## 15. Slider handoff near bedtime stripped grayscale (switch ON, screen colour)
+- **Symptom (Neeraj, 2026-07-09):** schedule ON near bedtime → grayscale on (screen gray).
+  He lowered the Dim slider to see better; the slider touch handed off to manual mode
+  (schedule turned off) → the screen went back to COLOUR while the grayscale switch still
+  read ON. "Grayscale is turned on but the screen is not grey."
+- **Root cause:** two behaviours collided. The slider handoff
+  (`handOffToManualIfScheduled`) turns the schedule off to move to manual, keeping the
+  screen as-is. But turning the schedule off ran the #14 rule "schedule off → release the
+  grayscale it owned" UNCONDITIONALLY, so the handoff stripped the grayscale the user
+  wanted to keep. The popover switch, never re-synced after the handoff, still showed ON.
+- **Fix:** the auto-grayscale release is gated on RETURNING TO NORMAL, not merely
+  "schedule off". `releaseAutoGrayscaleIfIdle()` releases only when the screen is fully
+  idle (`!scheduleEnabled && !masterEnabled && !emergency`). During a handoff
+  `masterEnabled` stays on (filtering continues in manual) → grayscale is KEPT, and its
+  ownership is TRANSFERRED to manual. Grayscale ownership is tracked by
+  `grayscaleFromSchedule` (auto-owned = schedule/handoff-inherited) vs. a user hand-toggle
+  (`setManualGrayscale` clears it → independent peer). The popover switch now reads
+  grayscale INTENT from `prefs.grayscaleOn` (not the laggy live UA getter), so it can never
+  show ON while the screen is colour.
+- **Invariant:** auto-owned grayscale (schedule, or inherited by a slider handoff) is
+  released ONLY when the screen returns fully to normal (idle); a hand-toggled grayscale is
+  an independent peer, never swept by a master/schedule off. A slider handoff MUST keep
+  grayscale and transfer its ownership to manual — never drop it. The grayscale switch
+  reflects `prefs.grayscaleOn` (intent), OR'd with `grayscaleSuspendedForEmergency` (#13),
+  never a bare live-getter read. All grayscale toggles from the popover route through
+  `setManualGrayscale` (marks manual ownership + edge-guards the bezel).
+- **Re-check:** schedule ON in the grayscale phase → drag the Dim slider → screen STAYS
+  gray, schedule switch goes off, grayscale switch stays ON (consistent). Then master off →
+  screen returns fully to normal (grayscale released). Separately: manual grayscale on by
+  hand → master off → grayscale STAYS on (#14 second case still holds). Verified 2026-07-09
+  via an injected recording-grayscale double driving the real preferencesChanged /
+  releaseAutoGrayscaleIfIdle / applyScheduleTarget / setManualGrayscale (9 scenario checks
+  incl. the exact bug A2, #14's C1, and manual-peer B2/D1 — all pass, no real bezels).
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)

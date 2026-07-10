@@ -2,6 +2,15 @@ import AppKit
 import ApplicationServices
 import notify
 
+/// The minimal grayscale surface AppDelegate depends on. Extracted so a recording
+/// double can be injected in tests/verification without toggling real system grayscale
+/// (no bezels, no screen change). `GrayscaleEngine` is the production implementation.
+protocol GrayscaleControlling: AnyObject {
+    func isGrayscaleEnabled() -> Bool
+    func setGrayscale(_ enabled: Bool)
+    func shutdown()
+}
+
 /// Layer 2 (dopamine/compulsion interruption): system-wide grayscale, one tap, no setup.
 ///
 /// Primary method: `UAGrayscaleSetEnabled` / `UAGrayscaleIsEnabled` (UniversalAccess,
@@ -20,7 +29,7 @@ import notify
 /// Fallback 1: write the MediaAccessibility pref directly + notify (same effect,
 /// used only if the UA symbols ever disappear). Fallback 2: synthesise the Color
 /// Filters shortcut (⌥⌘F5) via public CGEvent. Degrades, never crashes.
-final class GrayscaleEngine {
+final class GrayscaleEngine: GrayscaleControlling {
 
     private typealias SetBoolFn = @convention(c) (Bool) -> Void
     private typealias GetBoolFn = @convention(c) () -> Bool

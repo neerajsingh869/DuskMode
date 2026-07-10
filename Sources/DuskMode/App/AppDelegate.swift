@@ -2,9 +2,9 @@ import AppKit
 import Carbon.HIToolbox
 import DuskModeCore
 
-/// Small surface the popover uses to drive Emergency Color without knowing about
-/// the whole AppDelegate.
-protocol EmergencyColorControlling: AnyObject {
+/// Small surface the popover uses to drive screen state — Emergency Color and manual
+/// grayscale ownership — without knowing about the whole AppDelegate.
+protocol ScreenStateControlling: AnyObject {
     var isEmergencyColorActive: Bool { get }
     var emergencyColorEndDate: Date? { get }
     /// True only when there's actually a filter to suspend (colour/dim on via manual
@@ -14,22 +14,40 @@ protocol EmergencyColorControlling: AnyObject {
     /// grayscale switch as ON in this case — the setting is intact, just suspended.
     var grayscaleSuspendedForEmergency: Bool { get }
     func toggleEmergencyColor()
+    /// The user tapped the grayscale switch (or Reset). Marks grayscale as a manual,
+    /// independent peer (not schedule-owned) so it survives a later master/schedule off,
+    /// and edge-guards the system toggle so an unchanged state fires no stray bezel.
+    func setManualGrayscale(_ enabled: Bool)
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControlling {
+final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling {
 
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
 
     let overlayEngine = OverlayEngine()
     let gammaEngine = GammaEngine()
-    let grayscaleEngine = GrayscaleEngine()
+    let grayscaleEngine: GrayscaleControlling
     let circadianEngine = CircadianEngine()
+
+    /// Grayscale is injectable so a recording double can exercise the ownership state
+    /// machine without touching real system grayscale; production uses GrayscaleEngine.
+    init(grayscaleEngine: GrayscaleControlling = GrayscaleEngine()) {
+        self.grayscaleEngine = grayscaleEngine
+        super.init()
+    }
 
     /// Last grayscale state the *schedule* asked for. Grayscale is only touched when
     /// this changes (edge-triggered): the macOS Colour Filters bezel would otherwise
     /// fire every 30s tick, and a manual grayscale toggle mid-phase would be fought.
     private var scheduledGrayscale: Bool?
+
+    /// Whether the grayscale currently ON originated from the SCHEDULE (or was inherited
+    /// when a slider handoff moved a scheduled state into manual mode) vs. the user
+    /// tapping the grayscale switch by hand. Auto-owned grayscale is released when the
+    /// screen returns FULLY to normal; a hand-toggled grayscale is an independent peer
+    /// and is left alone (REGRESSIONS #14/#15). Survives a handoff (stays auto-owned).
+    private var grayscaleFromSchedule = false
 
     // MARK: Emergency Color (Phase 3)
     /// A momentary "I need real colours NOW" override that suspends every filter for
@@ -99,7 +117,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
         popover.behavior = .transient
         popover.contentViewController = PopoverViewController(
             overlayEngine: overlayEngine,
-            grayscaleEngine: grayscaleEngine,
             circadianEngine: circadianEngine,
             emergencyController: self)
     }
@@ -122,25 +139,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
             // The circadian schedule owns the screen: (re)start it. Its target flows
             // through onTarget → applyEffectiveState. Manual values are ignored.
             circadianEngine.setEnabled(true)
-        } else {
-            if circadianEngine.isEnabled {
-                circadianEngine.setEnabled(false)
-                // The schedule owned any grayscale IT turned on (~bedtime). Stopping the
-                // schedule reverts its effects: warmth/dim revert via applyEffectiveState,
-                // and this releases that grayscale too — so turning DuskMode/the schedule
-                // off returns the screen fully to normal, not stuck gray. A grayscale the
-                // user toggled by hand has scheduledGrayscale != true, so it's left alone.
-                // Skipped during an emergency (system grayscale is momentarily off then;
-                // cancelEmergencyColor restores the correct state).
-                if scheduledGrayscale == true,
-                   !isEmergencyColorActive,
-                   grayscaleEngine.isGrayscaleEnabled() {
-                    grayscaleEngine.setGrayscale(false)
-                }
-                scheduledGrayscale = nil   // schedule no longer owns grayscale
-            }
+        } else if circadianEngine.isEnabled {
+            // Schedule just turned off — it no longer drives grayscale. WHY it turned
+            // off matters: a seamless slider handoff keeps filtering (masterEnabled stays
+            // on) and should KEEP the grayscale, while turning DuskMode fully off should
+            // release it. releaseAutoGrayscaleIfIdle() decides that below — here we only
+            // drop the schedule's edge-trigger ownership marker.
+            circadianEngine.setEnabled(false)
+            scheduledGrayscale = nil
         }
+        releaseAutoGrayscaleIfIdle()
         applyEffectiveState()
+    }
+
+    /// If the screen has returned FULLY to normal (no schedule, master off) and the
+    /// grayscale currently on was one WE turned on automatically (schedule, or inherited
+    /// via a slider handoff), release it — so "off" is a genuinely normal screen, not
+    /// stuck gray (REGRESSIONS #14). A grayscale the user toggled BY HAND
+    /// (`grayscaleFromSchedule == false`) is an independent peer and is left alone
+    /// (REGRESSIONS #15). Skipped during an emergency (grayscale is momentarily off then;
+    /// cancelEmergencyColor restores the correct state). Edge-guarded so no stray bezel.
+    private func releaseAutoGrayscaleIfIdle() {
+        let prefs = PreferencesStore.shared
+        guard !prefs.scheduleEnabled, !prefs.masterEnabled, !isEmergencyColorActive else { return }
+        if grayscaleFromSchedule, grayscaleEngine.isGrayscaleEnabled() {
+            grayscaleEngine.setGrayscale(false)
+        }
+        grayscaleFromSchedule = false
     }
 
     // MARK: - Apply choke point
@@ -191,6 +216,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
                 grayscaleEngine.setGrayscale(target.grayscale)
             }
             scheduledGrayscale = target.grayscale
+            // The schedule now owns this grayscale (on → auto-owned, so it's released
+            // when the app returns to normal; off → nothing to own).
+            grayscaleFromSchedule = target.grayscale
         }
     }
 
@@ -200,6 +228,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, EmergencyColorControll
         if isEmergencyColorActive { cancelEmergencyColor() }
         else if isEmergencyColorAvailable { activateEmergencyColor() }
         // Nothing filtered → nothing to suspend; button/hotkey do nothing.
+    }
+
+    /// The user tapped the grayscale switch (or Reset). This is an explicit, manual
+    /// choice, so the grayscale becomes an INDEPENDENT peer — `grayscaleFromSchedule`
+    /// is cleared, so a later master/schedule off won't sweep it (REGRESSIONS #15). The
+    /// system toggle is edge-guarded so re-asserting an unchanged state fires no bezel.
+    /// Deliberately does NOT touch `scheduledGrayscale` — if the schedule is running, it
+    /// re-asserts grayscale only at the next phase boundary, not immediately.
+    func setManualGrayscale(_ enabled: Bool) {
+        grayscaleFromSchedule = false
+        if grayscaleEngine.isGrayscaleEnabled() != enabled {
+            grayscaleEngine.setGrayscale(enabled)
+        }
     }
 
     func activateEmergencyColor(seconds: TimeInterval = AppDelegate.emergencyColorDuration) {

@@ -18,9 +18,8 @@ import DuskModeCore
 final class PopoverViewController: NSViewController {
 
     private let overlayEngine: OverlayEngine
-    private let grayscaleEngine: GrayscaleEngine
     private let circadianEngine: CircadianEngine
-    private weak var emergencyController: EmergencyColorControlling?
+    private weak var emergencyController: ScreenStateControlling?
     private let prefs = PreferencesStore.shared
 
     /// Ticks once a second only while the popover is open AND Emergency Color is
@@ -46,11 +45,9 @@ final class PopoverViewController: NSViewController {
     private let dimValue = NSTextField(labelWithString: "")
 
     init(overlayEngine: OverlayEngine,
-         grayscaleEngine: GrayscaleEngine,
          circadianEngine: CircadianEngine,
-         emergencyController: EmergencyColorControlling) {
+         emergencyController: ScreenStateControlling) {
         self.overlayEngine = overlayEngine
-        self.grayscaleEngine = grayscaleEngine
         self.circadianEngine = circadianEngine
         self.emergencyController = emergencyController
         super.init(nibName: nil, bundle: nil)
@@ -258,10 +255,12 @@ final class PopoverViewController: NSViewController {
         masterSwitch.state = filtersActive ? .on : .off
         warmthSlider.doubleValue = (scheduleOn && target.active) ? target.warmth : prefs.warmth
         dimSlider.doubleValue = (scheduleOn && target.active) ? target.dim : prefs.dim
-        // Reflect grayscale INTENT, not the momentary system state: during an emergency
-        // the system grayscale is suppressed for real colour, but the setting is intact,
-        // so the switch stays ON (it comes back when the emergency ends).
-        let grayscaleOn = grayscaleEngine.isGrayscaleEnabled()
+        // Reflect grayscale INTENT, not the momentary system state. `prefs.grayscaleOn`
+        // is the intent (every setGrayscale writes it) and, unlike the live UA getter,
+        // never lags right after a set — so the switch can't show ON while the screen is
+        // colour (the bug Neeraj hit 2026-07-09). During an emergency the system grayscale
+        // is suppressed but the setting is intact, so OR the switch back ON.
+        let grayscaleOn = prefs.grayscaleOn
             || (emergencyController?.grayscaleSuspendedForEmergency ?? false)
         grayscaleSwitch.state = grayscaleOn ? .on : .off
         updateValueLabels()
@@ -404,20 +403,21 @@ final class PopoverViewController: NSViewController {
     }
 
     @objc private func grayscaleChanged() {
+        // Route through the controller so this is marked a MANUAL, independent peer —
+        // it won't be swept when the master/schedule later turns off (REGRESSIONS #15).
         // Deliberately does NOT turn the schedule off: a manual grayscale flip is a
         // momentary choice, and the schedule only re-asserts grayscale at the next
         // phase boundary (edge-triggered in AppDelegate).
-        grayscaleEngine.setGrayscale(grayscaleSwitch.state == .on)
+        emergencyController?.setManualGrayscale(grayscaleSwitch.state == .on)
         // Grayscale alone makes Emergency Color meaningful, so refresh its enabled state.
         updateEmergencyButton()
     }
 
     @objc private func resetTapped() {
-        // Turn system grayscale off first if it's on (edge-triggered — no bezel when
-        // it was already off), then restore the pref knobs and refresh the whole UI.
-        if grayscaleEngine.isGrayscaleEnabled() {
-            grayscaleEngine.setGrayscale(false)
-        }
+        // Turn system grayscale off (edge-guarded inside setManualGrayscale — no bezel
+        // when it was already off) and mark it manual, then restore the pref knobs and
+        // refresh the whole UI.
+        emergencyController?.setManualGrayscale(false)
         prefs.resetToDefaults()
         syncFromState()
     }
