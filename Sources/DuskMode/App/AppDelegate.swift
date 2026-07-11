@@ -10,9 +10,13 @@ protocol ScreenStateControlling: AnyObject {
     /// True only when there's actually a filter to suspend (colour/dim on via manual
     /// or an active schedule, or grayscale on). The button/hotkey are no-ops otherwise.
     var isEmergencyColorAvailable: Bool { get }
-    /// True while an emergency is momentarily holding grayscale off. The UI shows the
-    /// grayscale switch as ON in this case — the setting is intact, just suspended.
-    var grayscaleSuspendedForEmergency: Bool { get }
+    /// True while something (Emergency Color, or a whitelisted app being frontmost) is
+    /// momentarily holding grayscale off. The UI shows the grayscale switch as ON in
+    /// this case — the setting is intact, just suspended.
+    var grayscaleSuspended: Bool { get }
+    /// The app the popover's "Pause for …" switch acts on: the frontmost regular app
+    /// (DuskMode itself excluded). Nil until the first activation is seen.
+    var frontmostPausableApp: (bundleID: String, name: String)? { get }
     func toggleEmergencyColor()
     /// The user tapped the grayscale switch (or Reset). Marks grayscale as a manual,
     /// independent peer (not schedule-owned) so it survives a later mode change, and
@@ -53,6 +57,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     /// and is left alone (REGRESSIONS #14/#15). Survives a handoff (stays auto-owned).
     private var grayscaleFromSchedule = false
 
+    // MARK: Grayscale suppression (Emergency Color + app pause share ONE mechanism)
+    /// Both Emergency Color and the app whitelist need "hold grayscale off for a while,
+    /// then put back exactly what was there". Two independent save/restore pairs would
+    /// collide (e.g. switching away from a paused app mid-emergency must NOT re-enable
+    /// grayscale while the emergency still holds it off), so they share one suppressor
+    /// set with one saved intent: the FIRST suppressor records+drops the grayscale, the
+    /// LAST one to leave restores it — unconditionally, never gated on a read-back of
+    /// the laggy UA getter (REGRESSIONS #12).
+    private enum GrayscaleSuppressor { case emergency, appPause }
+    private var grayscaleSuppressors: Set<GrayscaleSuppressor> = []
+    private var grayscaleIntentBeforeSuppression = false
+
+    // MARK: App whitelist (Phase 3)
+    /// The last frontmost regular app (DuskMode itself excluded). When it's in the
+    /// user's pause list, warmth + grayscale are suspended for true colour while
+    /// DIMMING STAYS — brightness is the melatonin-critical layer and doesn't shift
+    /// hue, so the pause grants colour accuracy without opening a full escape hatch.
+    private var frontmostBundleID: String?
+    private var frontmostAppName: String?
+    private(set) var isPausedForFrontmostApp = false
+
     // MARK: Emergency Color (Phase 3)
     /// A momentary "I need real colours NOW" override that suspends every filter for
     /// a fixed window, then auto-reverts to whatever mode was running (manual or
@@ -61,14 +86,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     static let emergencyColorDuration: TimeInterval = 60
     private var emergencyColorTimer: Timer?
     private(set) var emergencyColorEndDate: Date?
-    private var grayscaleBeforeEmergency = false
     private var emergencyHotKey: GlobalHotKey?
 
     var isEmergencyColorActive: Bool { emergencyColorEndDate != nil }
 
-    /// While an emergency is running and it suppressed grayscale, the user's grayscale
-    /// intent is still ON — the switch should show that, not the suspended system state.
-    var grayscaleSuspendedForEmergency: Bool { isEmergencyColorActive && grayscaleBeforeEmergency }
+    /// While a suppressor is holding grayscale off, the user's grayscale intent is
+    /// still ON — the switch should show that, not the suspended system state.
+    var grayscaleSuspended: Bool { !grayscaleSuppressors.isEmpty && grayscaleIntentBeforeSuppression }
+
+    var frontmostPausableApp: (bundleID: String, name: String)? {
+        guard let id = frontmostBundleID else { return nil }
+        return (id, frontmostAppName ?? id)
+    }
 
     /// Something is currently filtering the screen, so there's a point to Emergency
     /// Color: colour/dim on (manual, or an active schedule) OR grayscale on.
@@ -102,8 +131,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
             self?.toggleEmergencyColor()
         }
 
+        // App whitelist: watch the frontmost app so filters pause for whitelisted
+        // creative apps. Observation only — NEVER reorder windows from this observer
+        // (REGRESSIONS #1); the pause flows through the same apply choke point.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(frontmostAppDidChange),
+            name: NSWorkspace.didActivateApplicationNotification, object: nil)
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            noteFrontmostApp(bundleID: front.bundleIdentifier, name: front.localizedName)
+        }
+
         // Reflect any persisted state on launch.
         preferencesChanged()
+    }
+
+    // MARK: - App whitelist (pause while a whitelisted app is frontmost)
+
+    @objc private func frontmostAppDidChange(_ note: Notification) {
+        guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+        noteFrontmostApp(bundleID: app.bundleIdentifier, name: app.localizedName)
+    }
+
+    /// Internal (not private) so verification can drive the real pause path without
+    /// fabricating NSRunningApplication instances.
+    func noteFrontmostApp(bundleID: String?, name: String?) {
+        guard let bundleID else { return }   // agent processes without an ID — keep last known
+        frontmostBundleID = bundleID
+        frontmostAppName = name
+        if updateAppPauseState() { applyEffectiveState() }
+    }
+
+    /// Recompute whether the frontmost app pauses DuskMode; handles the grayscale
+    /// suppression transitions. Returns true when the pause state changed.
+    @discardableResult
+    private func updateAppPauseState() -> Bool {
+        let shouldPause = frontmostBundleID.map { PreferencesStore.shared.isWhitelisted($0) } ?? false
+        guard shouldPause != isPausedForFrontmostApp else { return false }
+        // Flip the flag FIRST: suppress/unsuppress touch system grayscale, which posts
+        // a prefs change, and that reentrant applyEffectiveState must already resolve
+        // through the new pause state.
+        isPausedForFrontmostApp = shouldPause
+        if shouldPause { suppressGrayscale(.appPause) } else { unsuppressGrayscale(.appPause) }
+        return true
+    }
+
+    // MARK: - Grayscale suppression (shared by Emergency Color and app pause)
+
+    private func suppressGrayscale(_ reason: GrayscaleSuppressor) {
+        guard !grayscaleSuppressors.contains(reason) else { return }
+        let isFirst = grayscaleSuppressors.isEmpty
+        grayscaleSuppressors.insert(reason)
+        guard isFirst else { return }
+        // Record once, so a re-arm or a second suppressor can't overwrite it.
+        grayscaleIntentBeforeSuppression = grayscaleEngine.isGrayscaleEnabled()
+        if grayscaleIntentBeforeSuppression { grayscaleEngine.setGrayscale(false) }
+    }
+
+    private func unsuppressGrayscale(_ reason: GrayscaleSuppressor) {
+        guard grayscaleSuppressors.remove(reason) != nil, grayscaleSuppressors.isEmpty else { return }
+        // Restore is UNCONDITIONAL on the saved intent — never gate on a read-back of
+        // the current system state; the UA getter lags right after a set (#12).
+        if grayscaleIntentBeforeSuppression {
+            grayscaleEngine.setGrayscale(true)
+        }
+        // Keep the schedule's edge-trigger consistent with what we just restored, so
+        // its next tick doesn't fight it.
+        scheduledGrayscale = grayscaleIntentBeforeSuppression ? true : nil
     }
 
     // MARK: - Menu bar
@@ -140,6 +235,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     // MARK: - Reacting to preference changes
 
     @objc private func preferencesChanged() {
+        // The whitelist may have been edited (or grayscale suppression re-entered
+        // here) — recompute whether the frontmost app pauses DuskMode.
+        updateAppPauseState()
         let mode = PreferencesStore.shared.mode
         if mode == .auto {
             // The circadian schedule owns the screen: (re)start it. Its target flows
@@ -154,8 +252,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
             // emergency (grayscale is momentarily off then; cancel restores it).
             circadianEngine.setEnabled(false)
             scheduledGrayscale = nil
-            if grayscaleFromSchedule, !isEmergencyColorActive, grayscaleEngine.isGrayscaleEnabled() {
-                grayscaleEngine.setGrayscale(false)
+            if grayscaleFromSchedule, !isEmergencyColorActive {
+                if grayscaleEngine.isGrayscaleEnabled() {
+                    grayscaleEngine.setGrayscale(false)
+                } else if grayscaleSuppressors.contains(.appPause) {
+                    // The schedule's grayscale is currently suspended by a paused app.
+                    // Releasing it means "don't bring it back when the pause ends".
+                    grayscaleIntentBeforeSuppression = false
+                }
             }
             grayscaleFromSchedule = false
         }
@@ -181,9 +285,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         }
         let prefs = PreferencesStore.shared
         switch prefs.mode {
-        case .auto:   applyScheduleTarget(circadianEngine.currentTarget)
-        case .manual: applyFilters(enabled: true, warmth: prefs.warmth, dim: prefs.dim)
-        case .off:    applyFilters(enabled: false, warmth: 0, dim: 0)
+        case .auto:
+            let target = circadianEngine.currentTarget
+            if isPausedForFrontmostApp {
+                // Paused for a whitelisted app: warmth drops to neutral for true
+                // colour (grayscale is held off by the suppressor, handled on the
+                // pause transitions), but the DIM STAYS — brightness is the
+                // melatonin-critical layer and doesn't shift hue. The schedule's
+                // grayscale edge-trigger is deliberately frozen while paused; the
+                // first apply after unpausing reconciles any boundary crossed.
+                applyFilters(enabled: target.active, warmth: 0, dim: target.dim)
+            } else {
+                applyScheduleTarget(target)
+            }
+        case .manual:
+            applyFilters(enabled: true,
+                         warmth: isPausedForFrontmostApp ? 0 : prefs.warmth,
+                         dim: prefs.dim)
+        case .off:
+            applyFilters(enabled: false, warmth: 0, dim: 0)
         }
     }
 
@@ -231,6 +351,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     /// re-asserts grayscale only at the next phase boundary, not immediately.
     func setManualGrayscale(_ enabled: Bool) {
         grayscaleFromSchedule = false
+        if !grayscaleSuppressors.isEmpty {
+            // The screen is momentarily unfiltered (emergency, or a paused app is
+            // frontmost). Don't fight the suppression — record the user's intent so
+            // the restore honours it when the suppression ends.
+            grayscaleIntentBeforeSuppression = enabled
+            PreferencesStore.shared.grayscaleOn = enabled
+            return
+        }
+        // Keep the intent mirror true even when the system toggle is edge-guarded
+        // away, so the switch never drifts from a stale pref.
+        PreferencesStore.shared.grayscaleOn = enabled
         if grayscaleEngine.isGrayscaleEnabled() != enabled {
             grayscaleEngine.setGrayscale(enabled)
         }
@@ -254,10 +385,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         RunLoop.main.add(t, forMode: .common)
         emergencyColorTimer = t
         if firstActivation {
-            // Remember grayscale, then drop it for real colours. Recorded once so a
-            // re-arm can't overwrite it; restored verbatim on cancel.
-            grayscaleBeforeEmergency = grayscaleEngine.isGrayscaleEnabled()
-            if grayscaleBeforeEmergency { grayscaleEngine.setGrayscale(false) }
+            // Remember grayscale, then drop it for real colours — via the shared
+            // suppressor, so an app pause running at the same time can't collide.
+            suppressGrayscale(.emergency)
         }
         applyEffectiveState()
         NotificationCenter.default.post(name: Self.emergencyColorChanged, object: nil)
@@ -270,14 +400,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         emergencyColorTimer?.invalidate()
         emergencyColorTimer = nil
         emergencyColorEndDate = nil
-        // Restore grayscale to exactly what it was before — unconditionally, so a
-        // laggy system-state read can't lose it. If WE turned it off, turn it back on.
-        if grayscaleBeforeEmergency {
-            grayscaleEngine.setGrayscale(true)
-        }
-        // Keep the schedule's edge-trigger consistent with the grayscale we just
-        // restored, so its next tick doesn't fight it.
-        scheduledGrayscale = grayscaleBeforeEmergency ? true : nil
+        // Restore grayscale to exactly what it was before (unconditional on the saved
+        // intent, #12) — unless a paused app still holds the suppression, in which
+        // case the restore waits for the unpause.
+        unsuppressGrayscale(.emergency)
         applyEffectiveState()   // colour/dim back for the underlying mode
         NotificationCenter.default.post(name: Self.emergencyColorChanged, object: nil)
     }

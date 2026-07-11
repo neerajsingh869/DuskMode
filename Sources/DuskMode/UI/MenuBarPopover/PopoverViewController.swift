@@ -40,6 +40,14 @@ final class PopoverViewController: NSViewController {
     private let bedtimeTitle = NSTextField(labelWithString: "Bedtime")
     private let grayscaleTitle = NSTextField(labelWithString: "Grayscale")
 
+    // App whitelist: an in-context "pause for the app you're using" switch. The list
+    // starts EMPTY on purpose — every escape hatch is one the user deliberately chose.
+    private let pauseTitle = NSTextField(labelWithString: "Pause for current app")
+    private let pauseSwitch = NSSwitch()
+    private let pauseCaption = NSTextField(wrappingLabelWithString:
+        "True colour while this app is in front. Dimming stays.")
+    private let pausedListButton = NSPopUpButton(frame: .zero, pullsDown: true)
+
     /// Root vertical stack + the two Auto-only rows. These are *inserted* into the stack
     /// only in Auto and *removed* otherwise — hiding alone left dead space at the bottom
     /// because the popover's fittingSize didn't reliably reclaim a collapsed row's height.
@@ -137,6 +145,27 @@ final class PopoverViewController: NSViewController {
         grayscaleSwitch.toolTip =
             "A separate anti-doomscroll tool — available in any mode. Auto turns it on near bedtime. macOS briefly shows its Colour Filters confirmation on toggle."
 
+        // Pause for the frontmost app: adds/removes it from the whitelist in context.
+        pauseTitle.font = .systemFont(ofSize: 13)
+        pauseTitle.lineBreakMode = .byTruncatingTail
+        pauseTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pauseSwitch.target = self
+        pauseSwitch.action = #selector(pauseSwitchChanged)
+        pauseSwitch.toolTip =
+            "Colours return to normal while this app is in front — warmth and grayscale pause, dimming stays. DuskMode resumes the moment you switch away."
+        let pauseRow = row(leading: pauseTitle, trailing: pauseSwitch)
+
+        pauseCaption.font = .systemFont(ofSize: 11)
+        pauseCaption.textColor = .secondaryLabelColor
+        pauseCaption.preferredMaxLayoutWidth = Self.contentWidth
+        pauseCaption.isSelectable = false
+
+        // Pull-down listing the paused apps; clicking one removes it. Only inserted
+        // into the stack when the list is non-empty (no dead space otherwise).
+        pausedListButton.controlSize = .small
+        pausedListButton.font = .systemFont(ofSize: 11)
+        pausedListButton.toolTip = "Apps that pause DuskMode — click one to remove it."
+
         // Emergency Color: a momentary "real colours NOW" override. Suspends every
         // filter for 60s, then the wind-down (manual or schedule) resumes on its own.
         emergencyButton.bezelStyle = .rounded
@@ -155,12 +184,14 @@ final class PopoverViewController: NSViewController {
         let separator2 = separator()
         let separator3 = separator()
         let separator4 = separator()
+        let separator5 = separator()
         let warmthRow = row(leading: warmthTitle, trailing: warmthValue)
         let dimRow = row(leading: dimTitle, trailing: dimValue)
 
         // The two Auto-only rows (bedtimeRow, scheduleStatus) are NOT in the initial
         // array — updateAutoRows(for:) inserts them after modeControl only in Auto and
         // removes them otherwise, so the popover never reserves their height in Off/Manual.
+        // Same pattern for pausedListButton (only present when the pause list is non-empty).
         stack = NSStackView(views: [
             headerRow,
             subtitle,
@@ -175,6 +206,9 @@ final class PopoverViewController: NSViewController {
             grayscaleRow,
             grayscaleCaption,
             separator4,
+            pauseRow,
+            pauseCaption,
+            separator5,
             emergencyButton,
             emergencyCaption
         ])
@@ -199,7 +233,10 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(12, after: separator3)
         stack.setCustomSpacing(6, after: grayscaleRow)
         stack.setCustomSpacing(12, after: grayscaleCaption)
-        stack.setCustomSpacing(10, after: separator4)
+        stack.setCustomSpacing(12, after: separator4)
+        stack.setCustomSpacing(6, after: pauseRow)
+        stack.setCustomSpacing(12, after: pauseCaption)
+        stack.setCustomSpacing(10, after: separator5)
         stack.setCustomSpacing(6, after: emergencyButton)
 
         root.addSubview(stack)
@@ -214,7 +251,7 @@ final class PopoverViewController: NSViewController {
         for wide in [modeControl, warmthSlider, dimSlider, emergencyButton] as [NSView] {
             wide.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         }
-        for caption in [scheduleStatus, grayscaleCaption, emergencyCaption] {
+        for caption in [scheduleStatus, grayscaleCaption, pauseCaption, emergencyCaption] {
             caption.widthAnchor.constraint(
                 lessThanOrEqualToConstant: Self.contentWidth).isActive = true
         }
@@ -247,6 +284,11 @@ final class PopoverViewController: NSViewController {
     }
 
     private func syncFromState() {
+        // The emergency notification can arrive before the popover was EVER opened
+        // (⌥⌘C straight after launch) — the view and its IUO subviews (stack,
+        // bedtimeRow…) don't exist yet and would trap. Nothing to sync anyway:
+        // viewWillAppear syncs on first open.
+        guard isViewLoaded else { return }
         let target = circadianEngine.currentTarget
         let mode = prefs.mode
 
@@ -262,12 +304,13 @@ final class PopoverViewController: NSViewController {
         // colour. During an emergency the system grayscale is suppressed but the setting
         // is intact, so OR the switch back ON.
         let grayscaleOn = prefs.grayscaleOn
-            || (emergencyController?.grayscaleSuspendedForEmergency ?? false)
+            || (emergencyController?.grayscaleSuspended ?? false)
         grayscaleSwitch.state = grayscaleOn ? .on : .off
         updateValueLabels()
         updateEnabledStates()
         updateScheduleStatus()
         updateEmergencyButton()
+        updatePauseRow()
         // Bedtime + status are only meaningful in Auto — insert/remove them (not just
         // hide) so the popover reclaims their height and hugs its content in Off/Manual.
         updateAutoRows(for: mode)
@@ -371,6 +414,50 @@ final class PopoverViewController: NSViewController {
         scheduleStatus.stringValue = text
     }
 
+    /// Reflect the frontmost app in the "Pause for …" row and rebuild the paused-apps
+    /// pull-down (inserted into the stack only when the list is non-empty).
+    private func updatePauseRow() {
+        if let app = emergencyController?.frontmostPausableApp {
+            pauseTitle.stringValue = "Pause for \(app.name)"
+            pauseSwitch.isEnabled = true
+            pauseSwitch.state = prefs.isWhitelisted(app.bundleID) ? .on : .off
+        } else {
+            pauseTitle.stringValue = "Pause for current app"
+            pauseSwitch.isEnabled = false
+            pauseSwitch.state = .off
+        }
+
+        let apps = prefs.whitelistedApps.sorted {
+            $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending
+        }
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Paused apps (\(apps.count))",
+                                action: nil, keyEquivalent: ""))
+        for (bundleID, name) in apps {
+            let item = NSMenuItem(title: name, action: #selector(unpauseAppTapped(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = bundleID
+            item.toolTip = "Click to stop pausing DuskMode for \(name)"
+            menu.addItem(item)
+        }
+        pausedListButton.menu = menu
+
+        let shouldShow = !apps.isEmpty
+        let present = (pausedListButton.superview != nil)
+        guard shouldShow != present else { return }
+        if shouldShow {
+            guard let anchor = stack.arrangedSubviews.firstIndex(of: pauseCaption) else { return }
+            stack.insertArrangedSubview(pausedListButton, at: anchor + 1)
+            stack.setCustomSpacing(6, after: pauseCaption)
+            stack.setCustomSpacing(12, after: pausedListButton)
+        } else {
+            stack.removeArrangedSubview(pausedListButton)
+            pausedListButton.removeFromSuperview()
+            stack.setCustomSpacing(12, after: pauseCaption)
+        }
+    }
+
     /// Inserts the bedtime + schedule-status rows after modeControl in Auto, removes them
     /// otherwise. Removing (not hiding) is what lets the popover shrink to fit its content.
     private func updateAutoRows(for mode: PreferencesStore.Mode) {
@@ -433,6 +520,20 @@ final class PopoverViewController: NSViewController {
         emergencyController?.setManualGrayscale(grayscaleSwitch.state == .on)
         // Grayscale alone makes Emergency Color meaningful, so refresh its enabled state.
         updateEmergencyButton()
+    }
+
+    @objc private func pauseSwitchChanged() {
+        guard let app = emergencyController?.frontmostPausableApp else { return }
+        // The prefs change notifies AppDelegate, which recomputes the pause and applies
+        // it through the choke point — the colour change is visible immediately.
+        prefs.setWhitelisted(pauseSwitch.state == .on, bundleID: app.bundleID, name: app.name)
+        syncFromState()
+    }
+
+    @objc private func unpauseAppTapped(_ sender: NSMenuItem) {
+        guard let bundleID = sender.representedObject as? String else { return }
+        prefs.setWhitelisted(false, bundleID: bundleID, name: "")
+        syncFromState()
     }
 
     @objc private func resetTapped() {

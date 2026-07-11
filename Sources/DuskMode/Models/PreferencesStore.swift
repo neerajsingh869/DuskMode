@@ -28,6 +28,7 @@ final class PreferencesStore {
         static let bedtimeMinutes = "bedtimeMinutes"
         static let cachedLatitude = "cachedLatitude"
         static let cachedLongitude = "cachedLongitude"
+        static let whitelistedApps = "whitelistedApps"
     }
 
     /// First-launch values — also what the popover's "Reset to Defaults" restores.
@@ -96,6 +97,27 @@ final class PreferencesStore {
     var bedtimeMinutes: Int {
         get { min(1439, max(0, defaults.integer(forKey: Key.bedtimeMinutes))) }
         set { defaults.set(min(1439, max(0, newValue)), forKey: Key.bedtimeMinutes); notify() }
+    }
+
+    /// Apps that pause DuskMode while they're frontmost (bundle ID → display name,
+    /// captured at add time so the list can be shown even when the app isn't running).
+    /// Pausing drops warmth + grayscale for true colour; dimming stays — brightness is
+    /// the melatonin-critical layer and doesn't shift hue. Default: empty — every
+    /// escape hatch is one the user deliberately chose (Phase 3, intentionality).
+    var whitelistedApps: [String: String] {
+        (defaults.dictionary(forKey: Key.whitelistedApps) as? [String: String]) ?? [:]
+    }
+
+    func isWhitelisted(_ bundleID: String) -> Bool {
+        whitelistedApps[bundleID] != nil
+    }
+
+    /// Add or remove an app from the pause list. `name` is only stored on add.
+    func setWhitelisted(_ whitelisted: Bool, bundleID: String, name: String) {
+        var apps = whitelistedApps
+        if whitelisted { apps[bundleID] = name } else { apps.removeValue(forKey: bundleID) }
+        defaults.set(apps, forKey: Key.whitelistedApps)
+        notify()
     }
 
     /// Last CoreLocation fix, so sunset stays accurate across launches even if

@@ -298,6 +298,57 @@
   Verified 2026-07-10 (recording double: D2 hand grayscale survives Off, D3 survives
   Off→Manual — pass).
 
+## 18. App whitelist pause — drops warmth+grayscale, KEEPS dim; one shared grayscale suppressor (Phase 3)
+- **What it is:** apps in `PreferencesStore.whitelistedApps` pause DuskMode while frontmost
+  (popover: "Pause for [app]" switch + paused-apps pull-down; list defaults to EMPTY —
+  every escape hatch is deliberately chosen). Watched via
+  `NSWorkspace.didActivateApplicationNotification` → `noteFrontmostApp` →
+  `updateAppPauseState` → the same `applyEffectiveState` choke point (#12).
+- **Invariant — the pause keeps the DIM:** while paused, warmth → 0 (true hue) and
+  grayscale is suspended, but dim stays (`applyFilters(enabled:…, warmth: 0, dim: <mode's
+  dim>)`). Dimming scales all channels equally (no hue shift) and is the melatonin-critical
+  layer (brightness > colour — Nagare 2019/Cajochen 2022), so the whitelist grants colour
+  accuracy WITHOUT becoming a full escape hatch. Full brightness = Emergency Color's job.
+  Never "upgrade" the pause to drop dim too. Also: constant luminance on ⌘Tab in/out of a
+  paused app means no brightness flash (#9 stays safe).
+- **Invariant — ONE grayscale suppression mechanism:** Emergency Color and the app pause
+  share a single suppressor set (`grayscaleSuppressors` + `grayscaleIntentBeforeSuppression`):
+  the FIRST suppressor records + drops grayscale, the LAST to leave restores it
+  (unconditionally, never gated on the laggy UA read-back — #12). Never give a new
+  "temporarily hold grayscale off" feature its own save/restore pair — two independent
+  pairs collide (unpausing mid-emergency must NOT re-enable grayscale while the emergency
+  still holds it off, and vice versa). `setManualGrayscale` during a suppression records
+  intent only (no system toggle) and the restore honours it.
+- **Invariant — the pause suspends, never sweeps:** grayscale ownership
+  (`grayscaleFromSchedule`) is untouched by pause/unpause. The schedule's grayscale
+  edge-trigger is frozen while paused (paused Auto branch skips `applyScheduleTarget`);
+  the first apply after unpausing reconciles any phase boundary crossed. Leaving Auto
+  while paused clears the suppressed schedule-grayscale's saved intent (so Auto's
+  grayscale doesn't resurrect on unpause — #16's release still holds).
+- **Invariant — observation only:** the frontmost-app observer must never reorder windows
+  (#1). The pause state flows exclusively through `applyEffectiveState`.
+- **Re-check:** manual mode, warmth+dim up, grayscale on → whitelist the frontmost app →
+  hue goes neutral AND screen stays dimmed AND grayscale drops; switch away → all three
+  return. Fire + cancel Emergency while paused → grayscale stays off until switch-away.
+  Verified 2026-07-11 via injected recording-grayscale double + real gamma readbacks
+  driving the real paths (30 checks: dim kept at exactly 0.724 while channels equalise,
+  both emergency×pause orderings, off-mode pause, intent-change mid-pause, list-removal
+  unpause — all pass).
+
+## 19. Popover syncFromState before the view ever loaded → crash (latent since the mode UI)
+- **Symptom:** pressing ⌥⌘C (Emergency Color) after launch WITHOUT ever having opened the
+  popover crashed the app: `emergencyStateChanged` → `syncFromState` touches implicitly-
+  unwrapped views (`stack`, `bedtimeRow`) that don't exist until `loadView` runs.
+  Latent since the Off/Manual/Auto redesign added `updateAutoRows` (2026-07-10); caught
+  2026-07-11 by the whitelist harness (its `updatePauseRow` tripped the same nil).
+- **Fix:** `syncFromState` starts with `guard isViewLoaded else { return }` — nothing to
+  sync before the first open; `viewWillAppear` syncs then.
+- **Invariant:** any notification-driven UI refresh in the popover must be a no-op until
+  the view is loaded. Don't remove the guard; don't add new observers that touch subviews
+  without it.
+- **Re-check:** fresh launch → ⌥⌘C immediately (popover never opened) → no crash, override
+  runs; open the popover during the countdown → button shows the countdown.
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)
@@ -307,3 +358,5 @@
 4. Auto mode: status line correct; ⌘Tab flash check (#1);
    grayscale phase → one bezel only (#4); leaving Auto reverts grayscale (#16).
 5. Off → screen fully normal, no grayscale. Quit app → screen returns fully to normal.
+6. Whitelist a frontmost app → hue neutral, dim KEPT, grayscale suspended; switch away →
+   everything returns (#18).
