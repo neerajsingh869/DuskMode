@@ -53,10 +53,14 @@ final class PopoverViewController: NSViewController {
     private let pauseSwitch = NSSwitch()
     private let pauseCaption = NSTextField(wrappingLabelWithString:
         "True colour while this app is in front. Dimming stays.")
-    /// One row per paused app (icon · name · quiet ✕), rebuilt by updatePauseRow and
-    /// inserted after pauseCaption only while the list is non-empty. Inline rows, not
-    /// a menu: the list is deliberately tiny, so show it — don't hide it in a click.
-    private var pausedAppRows: [NSStackView] = []
+    /// The paused-apps list (one row per app: icon · name · quiet ✕), rebuilt by
+    /// updatePauseRow and inserted after pauseCaption only while non-empty. Inline
+    /// rows, not a menu: the list is deliberately tiny, so show it — don't hide it in
+    /// a click. Past maxInlinePausedRows the same rows scroll inside a capped-height
+    /// container (Control Center Wi-Fi style) so the popover never outgrows the screen;
+    /// the cap lands on a HALF row so the cut edge itself says "more below".
+    private var pausedListContainer: NSView?
+    private static let maxInlinePausedRows = 5
 
     /// Root vertical stack + the mode-dependent rows. These are *inserted* into the
     /// stack and *removed* per mode — hiding alone left dead space at the bottom
@@ -433,11 +437,11 @@ final class PopoverViewController: NSViewController {
 
         // Rebuild from scratch each sync — the list is a handful of rows at most,
         // and rebuilding keeps insertion order, icons, and spacing trivially correct.
-        for row in pausedAppRows {
-            stack.removeArrangedSubview(row)
-            row.removeFromSuperview()
+        if let container = pausedListContainer {
+            stack.removeArrangedSubview(container)
+            container.removeFromSuperview()
+            pausedListContainer = nil
         }
-        pausedAppRows = []
 
         let apps = prefs.whitelistedApps.sorted {
             $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending
@@ -447,14 +451,42 @@ final class PopoverViewController: NSViewController {
             stack.setCustomSpacing(12, after: pauseCaption)
             return
         }
-        for (index, app) in apps.enumerated() {
-            let row = pausedAppRow(bundleID: app.key, name: app.value)
-            stack.insertArrangedSubview(row, at: anchor + 1 + index)
-            stack.setCustomSpacing(5, after: row)
-            pausedAppRows.append(row)
+
+        let rows = apps.map { pausedAppRow(bundleID: $0.key, name: $0.value) }
+        let list = NSStackView(views: rows)
+        list.orientation = .vertical
+        list.alignment = .leading
+        list.spacing = 5
+
+        let container: NSView
+        if rows.count <= Self.maxInlinePausedRows {
+            container = list
+        } else {
+            // Cap the height and scroll. Cut at a half row: the clipped sixth row is
+            // the "more below" affordance — no label, no permanently visible scroller.
+            let rowHeight = rows[0].fittingSize.height
+            let cap = CGFloat(Self.maxInlinePausedRows) * (rowHeight + list.spacing)
+                + rowHeight * 0.5
+            let scroll = NSScrollView()
+            scroll.drawsBackground = false
+            scroll.hasVerticalScroller = true
+            scroll.autohidesScrollers = true
+            scroll.horizontalScrollElasticity = .none
+            scroll.documentView = list
+            list.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                list.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+                list.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
+                list.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+                scroll.heightAnchor.constraint(equalToConstant: cap),
+                scroll.widthAnchor.constraint(equalToConstant: Self.contentWidth)
+            ])
+            container = scroll
         }
+        stack.insertArrangedSubview(container, at: anchor + 1)
         stack.setCustomSpacing(8, after: pauseCaption)
-        if let last = pausedAppRows.last { stack.setCustomSpacing(12, after: last) }
+        stack.setCustomSpacing(12, after: container)
+        pausedListContainer = container
     }
 
     /// A single paused-app row: 16pt app icon, name, and a quiet tertiary ✕ that
