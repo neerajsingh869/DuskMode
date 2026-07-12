@@ -1,5 +1,6 @@
 import AppKit
 import DuskModeCore
+import UniformTypeIdentifiers
 
 /// The menu-bar popover: an Off / Manual / Auto mode selector, bedtime + live status
 /// (Auto), warmth + dim sliders (Manual only), a grayscale toggle, Emergency
@@ -52,7 +53,10 @@ final class PopoverViewController: NSViewController {
     private let pauseSwitch = NSSwitch()
     private let pauseCaption = NSTextField(wrappingLabelWithString:
         "True colour while this app is in front. Dimming stays.")
-    private let pausedListButton = NSPopUpButton(frame: .zero, pullsDown: true)
+    /// One row per paused app (icon · name · quiet ✕), rebuilt by updatePauseRow and
+    /// inserted after pauseCaption only while the list is non-empty. Inline rows, not
+    /// a menu: the list is deliberately tiny, so show it — don't hide it in a click.
+    private var pausedAppRows: [NSStackView] = []
 
     /// Root vertical stack + the mode-dependent rows. These are *inserted* into the
     /// stack and *removed* per mode — hiding alone left dead space at the bottom
@@ -170,12 +174,6 @@ final class PopoverViewController: NSViewController {
         pauseCaption.preferredMaxLayoutWidth = Self.contentWidth
         pauseCaption.isSelectable = false
 
-        // Pull-down listing the paused apps; clicking one removes it. Only inserted
-        // into the stack when the list is non-empty (no dead space otherwise).
-        pausedListButton.controlSize = .small
-        pausedListButton.font = .systemFont(ofSize: 11)
-        pausedListButton.toolTip = "Apps that pause DuskMode — click one to remove it."
-
         // Emergency Color: a momentary "real colours NOW" override. Suspends every
         // filter for 60s, then the wind-down (manual or schedule) resumes on its own.
         emergencyButton.bezelStyle = .rounded
@@ -204,7 +202,7 @@ final class PopoverViewController: NSViewController {
         // inserts bedtimeRow + scheduleStatus after modeControl only in Auto, and the
         // slider block (sliderSeparator…dimSlider) only in Off/Manual, removing them
         // otherwise so the popover never reserves their height. Same pattern for
-        // pausedListButton (only present when the pause list is non-empty).
+        // pausedAppRows (only present when the pause list is non-empty).
         stack = NSStackView(views: [
             headerRow,
             subtitle,
@@ -419,8 +417,9 @@ final class PopoverViewController: NSViewController {
         scheduleStatus.stringValue = text
     }
 
-    /// Reflect the frontmost app in the "Pause for …" row and rebuild the paused-apps
-    /// pull-down (inserted into the stack only when the list is non-empty).
+    /// Reflect the frontmost app in the "Pause for …" row and rebuild the inline
+    /// paused-apps rows (icon · name · ✕), inserted after the caption only when the
+    /// list is non-empty so the popover never reserves height for an empty list.
     private func updatePauseRow() {
         if let app = emergencyController?.frontmostPausableApp {
             pauseTitle.stringValue = "Pause for \(app.name)"
@@ -432,35 +431,71 @@ final class PopoverViewController: NSViewController {
             pauseSwitch.state = .off
         }
 
+        // Rebuild from scratch each sync — the list is a handful of rows at most,
+        // and rebuilding keeps insertion order, icons, and spacing trivially correct.
+        for row in pausedAppRows {
+            stack.removeArrangedSubview(row)
+            row.removeFromSuperview()
+        }
+        pausedAppRows = []
+
         let apps = prefs.whitelistedApps.sorted {
             $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending
         }
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Paused apps (\(apps.count))",
-                                action: nil, keyEquivalent: ""))
-        for (bundleID, name) in apps {
-            let item = NSMenuItem(title: name, action: #selector(unpauseAppTapped(_:)),
-                                  keyEquivalent: "")
-            item.target = self
-            item.representedObject = bundleID
-            item.toolTip = "Click to stop pausing DuskMode for \(name)"
-            menu.addItem(item)
-        }
-        pausedListButton.menu = menu
-
-        let shouldShow = !apps.isEmpty
-        let present = (pausedListButton.superview != nil)
-        guard shouldShow != present else { return }
-        if shouldShow {
-            guard let anchor = stack.arrangedSubviews.firstIndex(of: pauseCaption) else { return }
-            stack.insertArrangedSubview(pausedListButton, at: anchor + 1)
-            stack.setCustomSpacing(6, after: pauseCaption)
-            stack.setCustomSpacing(12, after: pausedListButton)
-        } else {
-            stack.removeArrangedSubview(pausedListButton)
-            pausedListButton.removeFromSuperview()
+        guard !apps.isEmpty,
+              let anchor = stack.arrangedSubviews.firstIndex(of: pauseCaption) else {
             stack.setCustomSpacing(12, after: pauseCaption)
+            return
         }
+        for (index, app) in apps.enumerated() {
+            let row = pausedAppRow(bundleID: app.key, name: app.value)
+            stack.insertArrangedSubview(row, at: anchor + 1 + index)
+            stack.setCustomSpacing(5, after: row)
+            pausedAppRows.append(row)
+        }
+        stack.setCustomSpacing(8, after: pauseCaption)
+        if let last = pausedAppRows.last { stack.setCustomSpacing(12, after: last) }
+    }
+
+    /// A single paused-app row: 16pt app icon, name, and a quiet tertiary ✕ that
+    /// right-aligns with the switch column above. Secondary styling on purpose —
+    /// this is a settings list, not an action.
+    private func pausedAppRow(bundleID: String, name: String) -> NSStackView {
+        let icon = NSImageView(image: Self.appIcon(forBundleID: bundleID))
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 16),
+            icon.heightAnchor.constraint(equalToConstant: 16)
+        ])
+
+        let label = NSTextField(labelWithString: name)
+        label.font = .systemFont(ofSize: 12)
+        label.lineBreakMode = .byTruncatingTail
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let remove = NSButton(title: "", target: self, action: #selector(unpauseAppTapped(_:)))
+        remove.isBordered = false
+        remove.image = NSImage(systemSymbolName: "xmark.circle.fill",
+                               accessibilityDescription: "Stop pausing for \(name)")?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .regular))
+        remove.contentTintColor = .tertiaryLabelColor
+        remove.identifier = NSUserInterfaceItemIdentifier(bundleID)
+        remove.toolTip = "Stop pausing DuskMode for \(name)"
+        remove.setContentHuggingPriority(.required, for: .horizontal)
+
+        let leading = NSStackView(views: [icon, label])
+        leading.orientation = .horizontal
+        leading.spacing = 6
+        return row(leading: leading, trailing: remove)
+    }
+
+    /// The app's real icon (the native Mac vocabulary for "list of apps"); falls
+    /// back to the generic application icon if the bundle isn't installed anymore.
+    private static func appIcon(forBundleID bundleID: String) -> NSImage {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        return NSWorkspace.shared.icon(for: .applicationBundle)
     }
 
     /// Swaps the mode-dependent block after modeControl: Auto shows bedtime + live
@@ -558,8 +593,8 @@ final class PopoverViewController: NSViewController {
         syncFromState()
     }
 
-    @objc private func unpauseAppTapped(_ sender: NSMenuItem) {
-        guard let bundleID = sender.representedObject as? String else { return }
+    @objc private func unpauseAppTapped(_ sender: NSButton) {
+        guard let bundleID = sender.identifier?.rawValue else { return }
         prefs.setWhitelisted(false, bundleID: bundleID, name: "")
         syncFromState()
     }
