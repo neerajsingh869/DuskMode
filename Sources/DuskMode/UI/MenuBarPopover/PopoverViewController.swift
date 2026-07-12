@@ -452,14 +452,20 @@ final class PopoverViewController: NSViewController {
             return
         }
 
-        let rows = apps.map { pausedAppRow(bundleID: $0.key, name: $0.value) }
-        let list = NSStackView(views: rows)
+        // Past the cap the rows live in a scroll view, so reserve a right-hand gutter
+        // for the scroller — otherwise it draws on top of the ✕ column.
+        let needsScroll = apps.count > Self.maxInlinePausedRows
+        let rowWidth = needsScroll ? Self.contentWidth - 16 : Self.contentWidth
+        let rows = apps.map { pausedAppRow(bundleID: $0.key, name: $0.value, width: rowWidth) }
+        // Flipped: a plain NSStackView is bottom-anchored inside a scroll view, which
+        // would open the list scrolled to the END (half-cut row at the top).
+        let list = FlippedStackView(views: rows)
         list.orientation = .vertical
         list.alignment = .leading
         list.spacing = 5
 
         let container: NSView
-        if rows.count <= Self.maxInlinePausedRows {
+        if !needsScroll {
             container = list
         } else {
             // Cap the height and scroll. Cut at a half row: the clipped sixth row is
@@ -476,7 +482,6 @@ final class PopoverViewController: NSViewController {
             list.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([
                 list.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-                list.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
                 list.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
                 scroll.heightAnchor.constraint(equalToConstant: cap),
                 scroll.widthAnchor.constraint(equalToConstant: Self.contentWidth)
@@ -492,7 +497,7 @@ final class PopoverViewController: NSViewController {
     /// A single paused-app row: 16pt app icon, name, and a quiet tertiary ✕ that
     /// right-aligns with the switch column above. Secondary styling on purpose —
     /// this is a settings list, not an action.
-    private func pausedAppRow(bundleID: String, name: String) -> NSStackView {
+    private func pausedAppRow(bundleID: String, name: String, width: CGFloat) -> NSStackView {
         let icon = NSImageView(image: Self.appIcon(forBundleID: bundleID))
         icon.imageScaling = .scaleProportionallyUpOrDown
         NSLayoutConstraint.activate([
@@ -518,7 +523,7 @@ final class PopoverViewController: NSViewController {
         let leading = NSStackView(views: [icon, label])
         leading.orientation = .horizontal
         leading.spacing = 6
-        return row(leading: leading, trailing: remove)
+        return row(leading: leading, trailing: remove, width: width)
     }
 
     /// The app's real icon (the native Mac vocabulary for "list of apps"); falls
@@ -678,13 +683,14 @@ final class PopoverViewController: NSViewController {
 
     // MARK: - Helpers
 
-    private func row(leading: NSView, trailing: NSView) -> NSStackView {
+    private func row(leading: NSView, trailing: NSView,
+                     width: CGFloat = PopoverViewController.contentWidth) -> NSStackView {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let row = NSStackView(views: [leading, spacer, trailing])
         row.orientation = .horizontal
         row.distribution = .fill
-        row.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        row.widthAnchor.constraint(equalToConstant: width).isActive = true
         return row
     }
 
@@ -704,4 +710,11 @@ final class PopoverViewController: NSViewController {
         line.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         return line
     }
+}
+
+/// NSStackView with a top-left origin. As an NSScrollView document a plain stack view
+/// is bottom-anchored, so the paused-apps list would open scrolled to its END (the
+/// half-cut "more below" row at the top instead of the bottom).
+private final class FlippedStackView: NSStackView {
+    override var isFlipped: Bool { true }
 }
