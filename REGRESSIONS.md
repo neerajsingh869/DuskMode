@@ -364,9 +364,18 @@
   3. **Grayscale edge at bedtime − 1.5 h** (was −2 h; Neeraj's real-use call), DECOUPLED
      from the colour anchors (`grayscaleStart`, clamped inside the window). The B−2 h
      colour anchor was renamed "Grayscale" → "Dusk".
-  4. **Auto mode shows NO sliders** — automation shows status, not levers. The popover's
-     warmth/dim slider block is inserted only in Off/Manual (`updateModeRows`); in Auto the
-     status line carries the live values ("Sunset · 5000 K · 10% dim · Warm at 8:30 PM").
+  4. **Sliders exist ONLY in Manual** (extended 2026-07-12 to drop them from Off too —
+     disabled-and-dimmed controls are dead weight; `updateModeRows` inserts the block only
+     in Manual). In Auto the status line carries the live values ("Sunset · 5000 K ·
+     10% dim · Warm at 8:30 PM"); in Off the popover shows just mode + durable settings.
+     **The popover layout principle (settled with Neeraj 2026-07-12):** controls that
+     drive the screen right now appear only in the mode where they work (sliders);
+     momentary ACTIONS gate on applicability (Emergency Color disabled when nothing is
+     filtered); durable SETTINGS stay available in every mode (bedtime, grayscale, the
+     pause-for-app list — pausing an app with nothing filtering is valid pre-configuration
+     for tonight). Nothing is ever shown disabled-and-dimmed. Also: the daytime Auto
+     status shows only "Daytime — starts at sunset, HH:MM" (no zero values — Auto is
+     doing nothing, and zeros would read as broken).
   5. **No IP geolocation, no start-time setting** — CoreLocation + timezone fallback stays;
      the app keeps making ZERO network requests (trust story); `min(sunset, bedtime−3h)`
      stays the smart start. A global "intensity" preference is the Phase-4 answer to

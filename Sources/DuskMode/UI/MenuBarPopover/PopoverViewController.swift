@@ -2,18 +2,23 @@ import AppKit
 import DuskModeCore
 
 /// The menu-bar popover: an Off / Manual / Auto mode selector, bedtime + live status
-/// (Auto), warmth + dim sliders (Off/Manual only), a grayscale toggle, Emergency
+/// (Auto), warmth + dim sliders (Manual only), a grayscale toggle, Emergency
 /// Color, and Reset. Built programmatically (no .xib) so the whole app stays
 /// plain-text and buildable without Xcode's Interface Builder.
 ///
 /// Mode model (one control, three states — replaces the old master + schedule switches):
-///  • Off    — screen untouched.
+///  • Off    — screen untouched; just mode + the durable settings.
 ///  • Manual — the warmth/dim sliders drive; grayscale is an independent toggle.
-///  • Auto   — the circadian timeline drives warmth/dim/grayscale. The sliders are
-///             REMOVED from the popover in Auto (the status line shows the live
-///             values instead): automation shows status, not levers. Switching to
-///             Manual explicitly carries the current look over; leaving Auto turns
-///             Auto's grayscale off (see AppDelegate — REGRESSIONS #16/#20).
+///  • Auto   — the circadian timeline drives warmth/dim/grayscale; the status line
+///             shows the live values. Switching to Manual explicitly carries the
+///             current look over; leaving Auto turns Auto's grayscale off (see
+///             AppDelegate — REGRESSIONS #16/#20).
+///
+/// The layout rule (settled 2026-07-12, REGRESSIONS #20): controls that drive the
+/// screen right now appear ONLY in the mode where they work (sliders → Manual);
+/// momentary actions gate on applicability (Emergency Color); durable preferences
+/// (bedtime, grayscale, the pause list) stay available always — settings are about
+/// the future, actions are about now. Nothing is ever shown disabled-and-dimmed.
 final class PopoverViewController: NSViewController {
 
     private let overlayEngine: OverlayEngine
@@ -314,7 +319,6 @@ final class PopoverViewController: NSViewController {
             || (emergencyController?.grayscaleSuspended ?? false)
         grayscaleSwitch.state = grayscaleOn ? .on : .off
         updateValueLabels()
-        updateEnabledStates()
         updateScheduleStatus()
         updateEmergencyButton()
         updatePauseRow()
@@ -383,21 +387,6 @@ final class PopoverViewController: NSViewController {
         let kelvin = ColorTemperature.kelvin(forWarmth: warmthSlider.doubleValue)
         warmthValue.stringValue = "\(Int((kelvin / 100).rounded()) * 100) K"
         dimValue.stringValue = "\(Int((dimSlider.doubleValue * 100).rounded()))%"
-    }
-
-    private func updateEnabledStates() {
-        let mode = prefs.mode
-        // Warmth/dim belong to the colour wind-down, so they're inert in Off.
-        let filtersOn = (mode != .off)
-        for control in [warmthSlider, dimSlider] { control.isEnabled = filtersOn }
-        for label in [warmthTitle, warmthValue, dimTitle, dimValue] {
-            label.alphaValue = filtersOn ? 1.0 : 0.4
-        }
-        // Grayscale is a separate behavioral tool — always available, even in Off.
-        grayscaleSwitch.isEnabled = true
-        grayscaleTitle.alphaValue = 1.0
-        bedtimePicker.isEnabled = (mode == .auto)
-        bedtimeTitle.alphaValue = (mode == .auto) ? 1.0 : 0.4
     }
 
     private func updateScheduleStatus() {
@@ -475,13 +464,14 @@ final class PopoverViewController: NSViewController {
     }
 
     /// Swaps the mode-dependent block after modeControl: Auto shows bedtime + live
-    /// status (automation shows status, not levers); Off/Manual show the warmth/dim
-    /// slider block. Removing (not hiding) is what lets the popover shrink to fit.
+    /// status (automation shows status, not levers); Manual shows the warmth/dim
+    /// slider block; Off shows neither (disabled sliders would be dead weight — the
+    /// values apply to nothing). Removing (not hiding) lets the popover shrink to fit.
     private func updateModeRows(for mode: PreferencesStore.Mode) {
         let autoRowsPresent = (bedtimeRow.superview != nil)
         let slidersPresent = (warmthRow.superview != nil)
         let wantAutoRows = (mode == .auto)
-        let wantSliders = (mode != .auto)
+        let wantSliders = (mode == .manual)
         guard autoRowsPresent != wantAutoRows || slidersPresent != wantSliders else { return }
 
         // Remove first, then insert — both blocks anchor right after modeControl.
