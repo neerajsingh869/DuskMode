@@ -1,17 +1,22 @@
 import Foundation
 
-/// The pure maths of one evening's wind-down: builds the keyframe ladder from
+/// The pure maths of one evening's wind-down: builds the anchor ladder from
 /// sunset/bedtime/sunrise and answers "what should the screen look like right now".
 /// No AppKit, no timers, no I/O — CircadianEngine drives it, unit tests exercise it.
 ///
-/// Phase ladder and numbers come straight from research/notes.md:
-/// - Sunset    (at sunset)      5000 K, dim 10%           — gentle early wind-down
-/// - Warm      (bedtime − 2.5h) 3400 K, dim 20%           — DLMO window opens 2–3h before bed
-/// - Grayscale (bedtime − 2h)   2700 K, dim 30%, gray ON  — doomscroll window
-/// - Red       (bedtime − 1h)   1900 K, dim 50%           — 620–670nm safe tail
-/// - Bedtime   (at bedtime)     1900 K, dim 80%           — toward the ≤1 lux goal
-/// Everything reverts at sunrise. Each phase ramps in over 25–30 min
-/// (research: 20–30 min transitions feel gradual, not jarring).
+/// The evening is one CONTINUOUS slide (no plateaus): warmth/dim move linearly from
+/// each anchor straight to the next, so the screen passes through every research
+/// value at its anchored time and never changes perceptibly between two 30 s ticks.
+/// Anchor values come straight from research/notes.md:
+/// - Sunset  (sunset + 30 min ramp-in)  5000 K, dim  0%  — colour-only dusk; the room
+///                                                          is still bright, dim comes later
+/// - Warm    (bedtime − 2.5 h)          3400 K, dim 20%  — DLMO window opens 2–3 h before bed
+/// - Dusk    (bedtime − 2 h)            2700 K, dim 30%  — wind-down deepens
+/// - Red     (bedtime − 1 h)            1900 K, dim 50%  — 620–670 nm safe tail
+/// - Bedtime (at bedtime)               1900 K, dim 80%  — toward the ≤1 lux goal
+/// Grayscale is binary (can't be interpolated): it flips ON at bedtime − 1.5 h —
+/// a separate edge, deliberately decoupled from the colour anchors.
+/// Everything reverts at sunrise.
 public struct CircadianTimeline {
 
     public struct Target: Equatable {
@@ -35,93 +40,107 @@ public struct CircadianTimeline {
         }
     }
 
-    public struct Keyframe {
-        public let start: Date             // ramp toward this keyframe's values begins here
-        public let ramp: TimeInterval
+    public struct Anchor {
+        public let time: Date              // warmth/dim reach exactly these values here
         public let warmth: Double
         public let dim: Double
-        public let grayscale: Bool         // flips at start (binary — can't be interpolated)
         public let name: String
     }
 
-    public let keyframes: [Keyframe]
+    public let start: Date          // activation — the slide begins here from (0, 0)
+    public let anchors: [Anchor]    // Sunset … Bedtime, strictly increasing times
+    public let grayscaleStart: Date // grayscale ON from here until sunrise
     public let end: Date            // sunrise — everything off
 
     public init(sunset: Date, bedtime: Date, sunrise: Date) {
         struct Preset {
-            let nominal: Date, ramp: TimeInterval
-            let kelvin: Double, dim: Double, gray: Bool, name: String
+            let nominal: Date
+            let kelvin: Double, dim: Double, name: String
         }
         // Sunset never starts later than 3h before bed, so short evenings
         // (early bedtimes, late summer sunsets) still get a full wind-down.
         let sunsetStart = min(sunset, bedtime.addingTimeInterval(-3 * 3600))
         let presets = [
-            Preset(nominal: sunsetStart, ramp: 30 * 60,
-                   kelvin: 5000, dim: 0.10, gray: false, name: "Sunset"),
-            Preset(nominal: bedtime.addingTimeInterval(-2.5 * 3600), ramp: 25 * 60,
-                   kelvin: 3400, dim: 0.20, gray: false, name: "Warm"),
-            Preset(nominal: bedtime.addingTimeInterval(-2 * 3600), ramp: 25 * 60,
-                   kelvin: 2700, dim: 0.30, gray: true, name: "Grayscale"),
-            Preset(nominal: bedtime.addingTimeInterval(-1 * 3600), ramp: 25 * 60,
-                   kelvin: 1900, dim: 0.50, gray: true, name: "Red"),
-            Preset(nominal: bedtime, ramp: 25 * 60,
-                   kelvin: 1900, dim: 0.80, gray: true, name: "Bedtime")
+            Preset(nominal: sunsetStart.addingTimeInterval(30 * 60),
+                   kelvin: 5000, dim: 0.00, name: "Sunset"),
+            Preset(nominal: bedtime.addingTimeInterval(-2.5 * 3600),
+                   kelvin: 3400, dim: 0.20, name: "Warm"),
+            Preset(nominal: bedtime.addingTimeInterval(-2 * 3600),
+                   kelvin: 2700, dim: 0.30, name: "Dusk"),
+            Preset(nominal: bedtime.addingTimeInterval(-1 * 3600),
+                   kelvin: 1900, dim: 0.50, name: "Red"),
+            Preset(nominal: bedtime,
+                   kelvin: 1900, dim: 0.80, name: "Bedtime")
         ]
-        // Keep keyframes strictly ordered: each starts no earlier than 5 min after
-        // the previous ramp completes, so a squeezed evening degrades gracefully
-        // instead of phases landing on top of each other.
-        var frames: [Keyframe] = []
+        // Keep anchors strictly ordered (≥ 5 min apart), so a squeezed evening
+        // degrades gracefully instead of anchors landing on top of each other.
+        start = sunsetStart
+        var frames: [Anchor] = []
         for preset in presets {
-            var start = preset.nominal
+            var time = max(preset.nominal, sunsetStart)
             if let previous = frames.last {
-                start = max(start, previous.start.addingTimeInterval(previous.ramp + 5 * 60))
+                time = max(time, previous.time.addingTimeInterval(5 * 60))
             }
-            frames.append(Keyframe(start: start, ramp: preset.ramp,
-                                   warmth: ColorTemperature.warmth(forKelvin: preset.kelvin),
-                                   dim: preset.dim, grayscale: preset.gray,
-                                   name: preset.name))
+            frames.append(Anchor(time: time,
+                                 warmth: ColorTemperature.warmth(forKelvin: preset.kelvin),
+                                 dim: preset.dim, name: preset.name))
         }
-        keyframes = frames
+        anchors = frames
         // Sunrise must land after the ladder even in degenerate inputs.
-        end = max(sunrise, frames.last!.start.addingTimeInterval(30 * 60))
+        end = max(sunrise, frames.last!.time.addingTimeInterval(30 * 60))
+        // Grayscale edge: 1.5 h before bed, clamped inside the active window.
+        let nominalGray = bedtime.addingTimeInterval(-1.5 * 3600)
+        grayscaleStart = min(max(nominalGray, frames[0].time), frames.last!.time)
     }
 
     public func target(at now: Date) -> Target {
         let day = Target(warmth: 0, dim: 0, grayscale: false, active: false,
                          phaseName: "Day",
-                         nextEventName: keyframes[0].name,
-                         nextEventTime: keyframes[0].start)
-        guard now >= keyframes[0].start, now < end else { return day }
+                         nextEventName: anchors[0].name,
+                         nextEventTime: start)
+        guard now >= start, now < end else { return day }
 
-        // Walk the ladder: settled between keyframes, interpolating inside a ramp.
+        // Continuous piecewise-linear slide through (start, 0, 0) and every anchor;
+        // after the last anchor the deepest values hold until sunrise.
+        var previousTime = start
         var previousWarmth = 0.0
         var previousDim = 0.0
-        for (index, frame) in keyframes.enumerated() {
-            let next: (String, Date) = index + 1 < keyframes.count
-                ? (keyframes[index + 1].name, keyframes[index + 1].start)
-                : ("Sunrise", end)
-            if now < frame.start {
-                break   // settled in the previous frame — handled below via index-1
+        var warmth = anchors.last!.warmth
+        var dim = anchors.last!.dim
+        for anchor in anchors {
+            if now < anchor.time {
+                let span = anchor.time.timeIntervalSince(previousTime)
+                let fraction = span > 0 ? now.timeIntervalSince(previousTime) / span : 1
+                warmth = previousWarmth + (anchor.warmth - previousWarmth) * fraction
+                dim = previousDim + (anchor.dim - previousDim) * fraction
+                break
             }
-            let rampEnd = frame.start.addingTimeInterval(frame.ramp)
-            if now < rampEnd {
-                let fraction = now.timeIntervalSince(frame.start) / frame.ramp
-                return Target(warmth: previousWarmth + (frame.warmth - previousWarmth) * fraction,
-                              dim: previousDim + (frame.dim - previousDim) * fraction,
-                              grayscale: frame.grayscale, active: true,
-                              phaseName: frame.name,
-                              nextEventName: next.0, nextEventTime: next.1)
-            }
-            if index + 1 == keyframes.count || now < keyframes[index + 1].start {
-                return Target(warmth: frame.warmth, dim: frame.dim,
-                              grayscale: frame.grayscale, active: true,
-                              phaseName: frame.name,
-                              nextEventName: next.0, nextEventTime: next.1)
-            }
-            previousWarmth = frame.warmth
-            previousDim = frame.dim
+            previousTime = anchor.time
+            previousWarmth = anchor.warmth
+            previousDim = anchor.dim
         }
-        return day   // unreachable: the loop always returns for now within [start, end)
+
+        // Phase = the segment we're in. "Sunset" covers activation through the Warm
+        // anchor (the ramp-in plus the first slide); each later anchor names the
+        // segment it starts.
+        var phase = anchors[0].name
+        for anchor in anchors.dropFirst() where now >= anchor.time {
+            phase = anchor.name
+        }
+
+        // Next event = the earliest upcoming boundary: a colour anchor, the
+        // grayscale edge, or sunrise.
+        var events: [(name: String, time: Date)] =
+            anchors.dropFirst().map { ($0.name, $0.time) }
+        events.append(("Grayscale", grayscaleStart))
+        events.append(("Sunrise", end))
+        events.sort { $0.time < $1.time }
+        let next = events.first { $0.time > now }
+
+        return Target(warmth: warmth, dim: dim,
+                      grayscale: now >= grayscaleStart, active: true,
+                      phaseName: phase,
+                      nextEventName: next?.name, nextEventTime: next?.time)
     }
 
     // MARK: - Window selection

@@ -2,17 +2,18 @@ import AppKit
 import DuskModeCore
 
 /// The menu-bar popover: an Off / Manual / Auto mode selector, bedtime + live status
-/// (Auto), warmth + dim sliders, a grayscale toggle, Emergency Color, and Reset.
-/// Built programmatically (no .xib) so the whole app stays plain-text and buildable
-/// without Xcode's Interface Builder.
+/// (Auto), warmth + dim sliders (Off/Manual only), a grayscale toggle, Emergency
+/// Color, and Reset. Built programmatically (no .xib) so the whole app stays
+/// plain-text and buildable without Xcode's Interface Builder.
 ///
 /// Mode model (one control, three states — replaces the old master + schedule switches):
 ///  • Off    — screen untouched.
 ///  • Manual — the warmth/dim sliders drive; grayscale is an independent toggle.
-///  • Auto   — the circadian timeline drives warmth/dim/grayscale; sliders show live
-///             values. Dragging a slider in Auto forks to Manual keeping the current
-///             look (grayscale included); clicking Manual/Off instead turns Auto's
-///             grayscale off (see AppDelegate — REGRESSIONS #16).
+///  • Auto   — the circadian timeline drives warmth/dim/grayscale. The sliders are
+///             REMOVED from the popover in Auto (the status line shows the live
+///             values instead): automation shows status, not levers. Switching to
+///             Manual explicitly carries the current look over; leaving Auto turns
+///             Auto's grayscale off (see AppDelegate — REGRESSIONS #16/#20).
 final class PopoverViewController: NSViewController {
 
     private let overlayEngine: OverlayEngine
@@ -48,11 +49,15 @@ final class PopoverViewController: NSViewController {
         "True colour while this app is in front. Dimming stays.")
     private let pausedListButton = NSPopUpButton(frame: .zero, pullsDown: true)
 
-    /// Root vertical stack + the two Auto-only rows. These are *inserted* into the stack
-    /// only in Auto and *removed* otherwise — hiding alone left dead space at the bottom
-    /// because the popover's fittingSize didn't reliably reclaim a collapsed row's height.
+    /// Root vertical stack + the mode-dependent rows. These are *inserted* into the
+    /// stack and *removed* per mode — hiding alone left dead space at the bottom
+    /// because the popover's fittingSize didn't reliably reclaim a collapsed row's
+    /// height. Auto shows bedtime + status; Off/Manual show the slider block instead.
     private var stack: NSStackView!
     private var bedtimeRow: NSStackView!
+    private var warmthRow: NSStackView!
+    private var dimRow: NSStackView!
+    private let sliderSeparator = NSBox()
     private let warmthTitle = NSTextField(labelWithString: "Warmth")
     private let warmthValue = NSTextField(labelWithString: "")
     private let dimTitle = NSTextField(labelWithString: "Dimming")
@@ -106,7 +111,7 @@ final class PopoverViewController: NSViewController {
         bedtimePicker.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         bedtimePicker.target = self
         bedtimePicker.action = #selector(bedtimeChanged)
-        bedtimePicker.toolTip = "Wind-down deepens toward this time; grayscale starts 2 h before"
+        bedtimePicker.toolTip = "Wind-down deepens toward this time; grayscale starts 1.5 h before"
         bedtimeRow = row(leading: bedtimeTitle, trailing: bedtimePicker)
 
         scheduleStatus.font = .systemFont(ofSize: 11)
@@ -181,23 +186,26 @@ final class PopoverViewController: NSViewController {
         emergencyCaption.isSelectable = false
 
         let separator1 = separator()
-        let separator2 = separator()
+        sliderSeparator.boxType = .separator
+        sliderSeparator.translatesAutoresizingMaskIntoConstraints = false
+        sliderSeparator.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         let separator3 = separator()
         let separator4 = separator()
         let separator5 = separator()
-        let warmthRow = row(leading: warmthTitle, trailing: warmthValue)
-        let dimRow = row(leading: dimTitle, trailing: dimValue)
+        warmthRow = row(leading: warmthTitle, trailing: warmthValue)
+        dimRow = row(leading: dimTitle, trailing: dimValue)
 
-        // The two Auto-only rows (bedtimeRow, scheduleStatus) are NOT in the initial
-        // array — updateAutoRows(for:) inserts them after modeControl only in Auto and
-        // removes them otherwise, so the popover never reserves their height in Off/Manual.
-        // Same pattern for pausedListButton (only present when the pause list is non-empty).
+        // Mode-dependent rows are NOT necessarily in the initial array — updateModeRows
+        // inserts bedtimeRow + scheduleStatus after modeControl only in Auto, and the
+        // slider block (sliderSeparator…dimSlider) only in Off/Manual, removing them
+        // otherwise so the popover never reserves their height. Same pattern for
+        // pausedListButton (only present when the pause list is non-empty).
         stack = NSStackView(views: [
             headerRow,
             subtitle,
             separator1,
             modeControl,
-            separator2,
+            sliderSeparator,
             warmthRow,
             warmthSlider,
             dimRow,
@@ -222,10 +230,10 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(2, after: headerRow)
         stack.setCustomSpacing(12, after: subtitle)
         stack.setCustomSpacing(12, after: separator1)
-        // Spacing after modeControl is 12 in Off/Manual (straight to separator2); Auto
-        // overrides it to 10 and adds the bedtime/status spacing in updateAutoRows.
+        // Spacing after modeControl is 12 in Off/Manual (straight to the slider block);
+        // Auto overrides it to 10 and adds the bedtime/status spacing in updateModeRows.
         stack.setCustomSpacing(12, after: modeControl)
-        stack.setCustomSpacing(12, after: separator2)
+        stack.setCustomSpacing(12, after: sliderSeparator)
         stack.setCustomSpacing(4, after: warmthRow)
         stack.setCustomSpacing(14, after: warmthSlider)
         stack.setCustomSpacing(4, after: dimRow)
@@ -257,7 +265,7 @@ final class PopoverViewController: NSViewController {
         }
 
         self.view = root
-        preferredContentSize = root.fittingSize
+        preferredContentSize = stack.fittingSize
     }
 
     override func viewWillAppear() {
@@ -289,15 +297,14 @@ final class PopoverViewController: NSViewController {
         // bedtimeRow…) don't exist yet and would trap. Nothing to sync anyway:
         // viewWillAppear syncs on first open.
         guard isViewLoaded else { return }
-        let target = circadianEngine.currentTarget
         let mode = prefs.mode
 
         modeControl.selectedSegment = Self.segment(for: mode)
         bedtimePicker.dateValue = Self.date(fromMinutes: prefs.bedtimeMinutes)
-        // In Auto, the sliders display the schedule's live values; otherwise the manual prefs.
-        let showLive = (mode == .auto && target.active)
-        warmthSlider.doubleValue = showLive ? target.warmth : prefs.warmth
-        dimSlider.doubleValue = showLive ? target.dim : prefs.dim
+        // The sliders exist only in Off/Manual and always show the manual prefs;
+        // Auto's live values appear in the status line instead.
+        warmthSlider.doubleValue = prefs.warmth
+        dimSlider.doubleValue = prefs.dim
         // Reflect grayscale INTENT, not the momentary system state. `prefs.grayscaleOn`
         // is the intent (every setGrayscale writes it) and, unlike the live UA getter,
         // never lags right after a set — so the switch can't show ON while the screen is
@@ -311,13 +318,15 @@ final class PopoverViewController: NSViewController {
         updateScheduleStatus()
         updateEmergencyButton()
         updatePauseRow()
-        // Bedtime + status are only meaningful in Auto — insert/remove them (not just
-        // hide) so the popover reclaims their height and hugs its content in Off/Manual.
-        updateAutoRows(for: mode)
+        // Swap the mode-dependent rows (bedtime+status in Auto, sliders otherwise) —
+        // insert/remove (not just hide) so the popover reclaims their height.
+        updateModeRows(for: mode)
         // Re-fit AFTER the change takes effect so the popover hugs its content (no dead
-        // space) — fittingSize is stale until the layout pass runs.
+        // space). Measure the STACK, not the root view: while the popover is open the
+        // root carries autoresizing constraints pinning it to its current frame, so
+        // view.fittingSize just echoes the old size and the popover would never shrink.
         view.layoutSubtreeIfNeeded()
-        preferredContentSize = view.fittingSize
+        preferredContentSize = stack.fittingSize
     }
 
     /// Reflects Emergency Color state: idle = "Emergency Color", active = a live
@@ -403,10 +412,17 @@ final class PopoverViewController: NSViewController {
             } else {
                 text = "Daytime — screen untouched."
             }
-        } else if let nextName = target.nextEventName, let nextTime = target.nextEventTime {
-            text = "\(target.phaseName) phase · \(nextName) at \(formatter.string(from: nextTime))."
         } else {
-            text = "\(target.phaseName) phase."
+            // The sliders are hidden in Auto, so the status line carries the live
+            // values: "Sunset · 5000 K · 10% dim · Warm at 8:30 PM."
+            let kelvin = Int((ColorTemperature.kelvin(forWarmth: target.warmth) / 100)
+                .rounded()) * 100
+            let dim = Int((target.dim * 100).rounded())
+            text = "\(target.phaseName) · \(kelvin) K · \(dim)% dim"
+            if let nextName = target.nextEventName, let nextTime = target.nextEventTime {
+                text += " · \(nextName) at \(formatter.string(from: nextTime))"
+            }
+            text += "."
         }
         if circadianEngine.usesApproximateLocation {
             text += " Using timezone-estimated location — allow Location access for exact sunset."
@@ -458,25 +474,49 @@ final class PopoverViewController: NSViewController {
         }
     }
 
-    /// Inserts the bedtime + schedule-status rows after modeControl in Auto, removes them
-    /// otherwise. Removing (not hiding) is what lets the popover shrink to fit its content.
-    private func updateAutoRows(for mode: PreferencesStore.Mode) {
-        let shouldShow = (mode == .auto)
-        let present = (bedtimeRow.superview != nil)
-        guard shouldShow != present else { return }
-        if shouldShow {
-            guard let anchor = stack.arrangedSubviews.firstIndex(of: modeControl) else { return }
+    /// Swaps the mode-dependent block after modeControl: Auto shows bedtime + live
+    /// status (automation shows status, not levers); Off/Manual show the warmth/dim
+    /// slider block. Removing (not hiding) is what lets the popover shrink to fit.
+    private func updateModeRows(for mode: PreferencesStore.Mode) {
+        let autoRowsPresent = (bedtimeRow.superview != nil)
+        let slidersPresent = (warmthRow.superview != nil)
+        let wantAutoRows = (mode == .auto)
+        let wantSliders = (mode != .auto)
+        guard autoRowsPresent != wantAutoRows || slidersPresent != wantSliders else { return }
+
+        // Remove first, then insert — both blocks anchor right after modeControl.
+        if autoRowsPresent && !wantAutoRows {
+            for view in [bedtimeRow!, scheduleStatus] {
+                stack.removeArrangedSubview(view)
+                view.removeFromSuperview()
+            }
+        }
+        if slidersPresent && !wantSliders {
+            for view in [sliderSeparator, warmthRow!, warmthSlider, dimRow!, dimSlider] {
+                stack.removeArrangedSubview(view)
+                view.removeFromSuperview()
+            }
+        }
+        guard let anchor = stack.arrangedSubviews.firstIndex(of: modeControl) else { return }
+        if wantAutoRows && !autoRowsPresent {
             stack.insertArrangedSubview(bedtimeRow, at: anchor + 1)
             stack.insertArrangedSubview(scheduleStatus, at: anchor + 2)
             stack.setCustomSpacing(10, after: modeControl)
             stack.setCustomSpacing(6, after: bedtimeRow)
             stack.setCustomSpacing(12, after: scheduleStatus)
-        } else {
-            stack.removeArrangedSubview(bedtimeRow)
-            bedtimeRow.removeFromSuperview()
-            stack.removeArrangedSubview(scheduleStatus)
-            scheduleStatus.removeFromSuperview()
+        }
+        if wantSliders && !slidersPresent {
+            stack.insertArrangedSubview(sliderSeparator, at: anchor + 1)
+            stack.insertArrangedSubview(warmthRow, at: anchor + 2)
+            stack.insertArrangedSubview(warmthSlider, at: anchor + 3)
+            stack.insertArrangedSubview(dimRow, at: anchor + 4)
+            stack.insertArrangedSubview(dimSlider, at: anchor + 5)
             stack.setCustomSpacing(12, after: modeControl)
+            stack.setCustomSpacing(12, after: sliderSeparator)
+            stack.setCustomSpacing(4, after: warmthRow)
+            stack.setCustomSpacing(14, after: warmthSlider)
+            stack.setCustomSpacing(4, after: dimRow)
+            stack.setCustomSpacing(12, after: dimSlider)
         }
     }
 
@@ -484,10 +524,10 @@ final class PopoverViewController: NSViewController {
 
     @objc private func modeChanged() {
         let newMode = Self.mode(forSegment: modeControl.selectedSegment)
-        // Leaving Auto for Manual explicitly: carry the current warmth/dim so there's no
-        // visual jump. Grayscale is NOT retained here — an explicit leave-Auto turns it
-        // off (AppDelegate releases the schedule-owned grayscale). A slider drag is the
-        // path that keeps grayscale (see forkToManualIfAuto).
+        // Leaving Auto for Manual: carry the current warmth/dim so there's no visual
+        // jump. Grayscale is NOT retained — leaving Auto releases the schedule-owned
+        // grayscale (AppDelegate, REGRESSIONS #16). With the sliders gone from Auto,
+        // this explicit switch is the ONLY Auto → Manual path (#20).
         if newMode == .manual, prefs.mode == .auto {
             adoptCurrentScheduleValues()
         }
@@ -501,13 +541,11 @@ final class PopoverViewController: NSViewController {
     }
 
     @objc private func warmthChanged() {
-        forkToManualIfAuto()
         prefs.warmth = warmthSlider.doubleValue
         updateValueLabels()
     }
 
     @objc private func dimChanged() {
-        forkToManualIfAuto()
         prefs.dim = dimSlider.doubleValue
         updateValueLabels()
     }
@@ -543,21 +581,6 @@ final class PopoverViewController: NSViewController {
         emergencyController?.setManualGrayscale(false)
         prefs.resetToDefaults()
         syncFromState()
-    }
-
-    /// Dragging a slider while in Auto = fork to Manual, keeping the screen exactly
-    /// as-is (adopt the schedule's current values first) AND keeping grayscale (transfer
-    /// its ownership to manual so leaving Auto doesn't release it).
-    private func forkToManualIfAuto() {
-        guard prefs.mode == .auto else { return }
-        adoptCurrentScheduleValues()
-        emergencyController?.retainGrayscaleAsManual()
-        prefs.mode = .manual
-        modeControl.selectedSegment = Self.segment(for: .manual)
-        updateEnabledStates()
-        updateAutoRows(for: .manual)
-        view.layoutSubtreeIfNeeded()
-        preferredContentSize = view.fittingSize
     }
 
     private func adoptCurrentScheduleValues() {

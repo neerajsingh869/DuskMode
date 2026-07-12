@@ -22,10 +22,6 @@ protocol ScreenStateControlling: AnyObject {
     /// independent peer (not schedule-owned) so it survives a later mode change, and
     /// edge-guards the system toggle so an unchanged state fires no stray bezel.
     func setManualGrayscale(_ enabled: Bool)
-    /// A slider handoff (Auto → Manual keeping the current look) transfers ownership of
-    /// the currently-on grayscale to manual, WITHOUT touching the system — so leaving
-    /// Auto doesn't release it. Call this BEFORE switching the mode to manual.
-    func retainGrayscaleAsManual()
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling {
@@ -246,9 +242,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         } else if circadianEngine.isEnabled {
             // Just LEFT Auto. The schedule no longer drives grayscale — release the
             // grayscale it owned so leaving Auto reverts what Auto did (REGRESSIONS #16).
-            // The one exception is a slider handoff (Auto → Manual keeping the current
-            // look): that path calls retainGrayscaleAsManual() FIRST, clearing
-            // grayscaleFromSchedule, so it isn't released here. Skipped during an
+            // With the sliders removed from Auto (#20) the explicit mode click is the
+            // only way out, so the release is unconditional. Skipped during an
             // emergency (grayscale is momentarily off then; cancel restores it).
             circadianEngine.setEnabled(false)
             scheduledGrayscale = nil
@@ -365,12 +360,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         if grayscaleEngine.isGrayscaleEnabled() != enabled {
             grayscaleEngine.setGrayscale(enabled)
         }
-    }
-
-    /// Transfer ownership of the current grayscale to manual without touching the system,
-    /// so a following Auto → Manual mode change keeps it instead of releasing it.
-    func retainGrayscaleAsManual() {
-        grayscaleFromSchedule = false
     }
 
     func activateEmergencyColor(seconds: TimeInterval = AppDelegate.emergencyColorDuration) {

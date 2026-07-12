@@ -111,7 +111,8 @@ func time(_ hour: Int, _ minute: Int, dayOffset: Int = 0) -> Date {
 }
 
 // A typical evening: sunset 19:10, bedtime 23:00, sunrise 05:45 next day.
-// Nominal ladder: Sunset 19:10, Warm 20:30, Grayscale 21:00, Red 22:00, Bedtime 23:00.
+// Anchors: Sunset 19:40 (ramp-in from 19:10), Warm 20:30, Dusk 21:00, Red 22:00,
+// Bedtime 23:00. Grayscale edge at 21:30 (bedtime − 1.5 h).
 let typical = CircadianTimeline(sunset: time(19, 10),
                                 bedtime: time(23, 0),
                                 sunrise: time(5, 45, dayOffset: 1))
@@ -124,30 +125,60 @@ do {
 }
 
 do {
-    // 19:50 — past the 30-min sunset ramp, before Warm.
-    let target = typical.target(at: time(19, 50))
-    expect(target.active && target.phaseName == "Sunset", "19:50 is settled Sunset phase")
+    // 19:40 — the Sunset anchor: exactly 5000 K and (new) ZERO dim — colour-only dusk.
+    let target = typical.target(at: time(19, 40))
+    expect(target.active && target.phaseName == "Sunset", "19:40 is the Sunset anchor")
     expectEqual(target.warmth, ColorTemperature.warmth(forKelvin: 5000),
-                accuracy: 0.001, "Sunset warmth = 5000 K")
-    expectEqual(target.dim, 0.10, accuracy: 0.001, "Sunset dim = 10%")
+                accuracy: 0.001, "Sunset anchor warmth = 5000 K")
+    expectEqual(target.dim, 0.0, accuracy: 0.001, "Sunset anchor dim = 0% (colour first)")
     expect(!target.grayscale && target.nextEventName == "Warm",
            "Sunset: no grayscale, Warm next")
 }
 
 do {
-    // Warm starts 20:30, ramp 25 min → halfway at 20:42:30.
-    let halfway = time(20, 30).addingTimeInterval(12.5 * 60)
-    let target = typical.target(at: halfway)
+    // CONTINUOUS slide, no plateau: 20:05 is halfway from Sunset (19:40) to Warm
+    // (20:30) — values must already be en route, not parked at the anchor.
+    let target = typical.target(at: time(20, 5))
     let expected = (ColorTemperature.warmth(forKelvin: 5000)
                     + ColorTemperature.warmth(forKelvin: 3400)) / 2
-    expect(target.phaseName == "Warm", "mid-ramp reports Warm phase")
-    expectEqual(target.warmth, expected, accuracy: 0.002, "warmth interpolates halfway")
-    expectEqual(target.dim, 0.15, accuracy: 0.002, "dim interpolates halfway")
+    expect(target.phaseName == "Sunset", "20:05 still reports the Sunset segment")
+    expectEqual(target.warmth, expected, accuracy: 0.002,
+                "no plateau — warmth halfway to Warm at the segment midpoint")
+    expectEqual(target.dim, 0.10, accuracy: 0.002, "dim halfway to Warm's 20%")
 }
 
 do {
-    expect(!typical.target(at: time(20, 59)).grayscale, "20:59 — grayscale still off")
-    expect(typical.target(at: time(21, 1)).grayscale, "21:01 — grayscale flipped on")
+    // 20:45 — halfway from Warm (20:30) to Dusk (21:00).
+    let target = typical.target(at: time(20, 45))
+    let expected = (ColorTemperature.warmth(forKelvin: 3400)
+                    + ColorTemperature.warmth(forKelvin: 2700)) / 2
+    expect(target.phaseName == "Warm", "20:45 is the Warm segment")
+    expectEqual(target.warmth, expected, accuracy: 0.002, "warmth slides Warm → Dusk")
+    expectEqual(target.dim, 0.25, accuracy: 0.002, "dim slides 20% → 30%")
+}
+
+do {
+    // The whole evening is monotonic: warmth and dim never move backwards.
+    var last = typical.target(at: time(19, 10))
+    var monotonic = true
+    for minutes in stride(from: 1, through: 4 * 60, by: 1) {
+        let target = typical.target(at: time(19, 10).addingTimeInterval(Double(minutes) * 60))
+        if target.warmth < last.warmth - 1e-9 || target.dim < last.dim - 1e-9 {
+            monotonic = false
+        }
+        last = target
+    }
+    expect(monotonic, "warmth/dim are monotonically non-decreasing all evening")
+}
+
+do {
+    // Grayscale edge at bedtime − 1.5 h = 21:30, decoupled from the colour anchors.
+    expect(!typical.target(at: time(21, 29)).grayscale, "21:29 — grayscale still off")
+    expect(typical.target(at: time(21, 31)).grayscale, "21:31 — grayscale flipped on")
+    let beforeEdge = typical.target(at: time(21, 10))
+    expect(beforeEdge.phaseName == "Dusk" && beforeEdge.nextEventName == "Grayscale"
+           && beforeEdge.nextEventTime == time(21, 30),
+           "21:10 is Dusk with Grayscale announced next at 21:30")
 }
 
 do {
@@ -166,16 +197,19 @@ do {
 }
 
 do {
-    // An early bedtime squeezes the ladder but keyframes must stay strictly ordered.
+    // An early bedtime squeezes the ladder but anchors must stay strictly ordered
+    // and the grayscale edge must stay inside the active window.
     let squeezed = CircadianTimeline(sunset: time(19, 10),
                                      bedtime: time(20, 0),
                                      sunrise: time(5, 45, dayOffset: 1))
-    for (a, b) in zip(squeezed.keyframes, squeezed.keyframes.dropFirst()) {
-        expect(b.start >= a.start.addingTimeInterval(a.ramp),
-               "squeezed ladder: \(b.name) starts after \(a.name)'s ramp")
+    for (a, b) in zip(squeezed.anchors, squeezed.anchors.dropFirst()) {
+        expect(b.time > a.time, "squeezed ladder: \(b.name) is after \(a.name)")
     }
-    expect(squeezed.end > squeezed.keyframes.last!.start,
-           "squeezed ladder still ends after last keyframe")
+    expect(squeezed.end > squeezed.anchors.last!.time,
+           "squeezed ladder still ends after the last anchor")
+    expect(squeezed.grayscaleStart >= squeezed.start
+           && squeezed.grayscaleStart <= squeezed.anchors.last!.time,
+           "squeezed grayscale edge stays inside the window")
 }
 
 do {
@@ -183,7 +217,7 @@ do {
     let lateSunset = CircadianTimeline(sunset: time(21, 30),
                                        bedtime: time(23, 0),
                                        sunrise: time(5, 45, dayOffset: 1))
-    expect(lateSunset.keyframes[0].start == time(20, 0),
+    expect(lateSunset.start == time(20, 0),
            "late sunset capped at bedtime − 3 h")
 }
 
@@ -223,10 +257,10 @@ do {
                                             bedtimeMinutes: 30,
                                             timeZone: tz)
     let target = timeline.target(at: time(22, 0))
-    expect(timeline.keyframes.last!.start == time(0, 30, dayOffset: 1),
-           "00:30 bedtime keyframe lands next morning")
+    expect(timeline.anchors.last!.time == time(0, 30, dayOffset: 1),
+           "00:30 bedtime anchor lands next morning")
     expect(target.active && target.phaseName == "Warm",
-           "22:00 with 00:30 bedtime is the Warm phase (2.5 h out)")
+           "22:00 with 00:30 bedtime is the Warm segment (2.5 h out)")
 }
 
 // MARK: - Verdict

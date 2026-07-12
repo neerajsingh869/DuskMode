@@ -349,6 +349,62 @@
 - **Re-check:** fresh launch → ⌥⌘C immediately (popover never opened) → no crash, override
   runs; open the popover during the countdown → button shows the countdown.
 
+## 20. Continuous timeline + opinionated Auto (no sliders) — settled design (2026-07-11)
+- **Decision (Neeraj, 2026-07-11, after a full five-lens discussion):** five changes in one
+  pass, all approved explicitly:
+  1. **The evening is one CONTINUOUS slide, no plateaus.** `CircadianTimeline` interpolates
+     warmth/dim linearly from each anchor straight to the next (values are reached exactly
+     AT the research-anchored times; between anchors the screen is slightly *ahead*, never
+     behind). Rationale: a perceptible step/plateau is a "moment of decision" where users
+     fight the app; a ~10 K-per-tick drift is below perception. Do NOT reintroduce
+     ramp-then-hold plateaus.
+  2. **Sunset anchor dim = 0%** — dusk is colour-only; dimming layers in from the Warm
+     anchor (the ≤10 lux science is about the final 1–2 h; a dimmed screen in a still-bright
+     room reads as "broken display"). Layering is warmth → +dim → +grayscale by design.
+  3. **Grayscale edge at bedtime − 1.5 h** (was −2 h; Neeraj's real-use call), DECOUPLED
+     from the colour anchors (`grayscaleStart`, clamped inside the window). The B−2 h
+     colour anchor was renamed "Grayscale" → "Dusk".
+  4. **Auto mode shows NO sliders** — automation shows status, not levers. The popover's
+     warmth/dim slider block is inserted only in Off/Manual (`updateModeRows`); in Auto the
+     status line carries the live values ("Sunset · 5000 K · 10% dim · Warm at 8:30 PM").
+  5. **No IP geolocation, no start-time setting** — CoreLocation + timezone fallback stays;
+     the app keeps making ZERO network requests (trust story); `min(sunset, bedtime−3h)`
+     stays the smart start. A global "intensity" preference is the Phase-4 answer to
+     "tonight feels too strong", NOT per-slider access in Auto.
+- **Consequence — the slider-fork path is GONE:** with no sliders in Auto there is no
+  slider-drag handoff; `retainGrayscaleAsManual()` and `forkToManualIfAuto()` were removed.
+  The ONLY Auto → Manual path is the explicit mode click, which adopts the schedule's
+  current warmth/dim (no visual jump) and RELEASES the schedule's grayscale (#16's rule,
+  now unconditional; #15's handoff exception is moot — grayscale intent switch display
+  #13/#15 and hand-toggled-peer rules #14/#17 are unchanged).
+- **Invariant:** timeline anchors stay strictly ordered (≥5 min apart) on squeezed
+  evenings; `grayscaleStart` stays inside the active window; warmth/dim are monotonically
+  non-decreasing across the whole evening (self-tested). The grayscale edge stays
+  edge-triggered in AppDelegate (#4) — the timeline changing shape must not add per-tick
+  toggles.
+- **Re-check:** `swift run DuskModeSelfTest` (continuous-slide, monotonicity, −1.5 h edge,
+  Dusk rename, squeezed/late-sunset clamps). Popover: Auto shows bedtime + status only
+  (no sliders, no dead space); Off/Manual show sliders; Auto→Manual carries current look.
+
+## 21. Popover never shrank on an in-popover mode switch (dead space) — measure the STACK
+- **Symptom:** with the popover OPEN, switching to a mode with less content (e.g. → Auto,
+  which drops the 5-view slider block for 2 smaller rows) left ~65 px of dead space at the
+  bottom. Reopening fixed it. Caught 2026-07-12 by the mode-switch harness (heights read
+  452/452/452 across Off/Manual/Auto when the true Auto content height was 387).
+- **Root cause:** `syncFromState` set `preferredContentSize = view.fittingSize` — but while
+  the popover is shown, the ROOT view carries autoresizing constraints pinning it to its
+  current frame, so `view.fittingSize` just echoes the old size. It can only ever grow via
+  content pressure, never shrink. (The 2026-07-10 dead-space fix added
+  `layoutSubtreeIfNeeded`, which was necessary but not sufficient.)
+- **Fix:** measure the STACK, which uses pure Auto Layout
+  (`preferredContentSize = stack.fittingSize`, also in `loadView`). Verified live:
+  Off/Manual 452 ↔ Auto 387, popover resizes both directions with no dead space.
+- **Invariant:** popover sizing reads `stack.fittingSize`, never the root view's. Any new
+  insert/remove of rows must re-run the `layoutSubtreeIfNeeded()` + stack-measure pair in
+  `syncFromState`.
+- **Re-check:** open popover in Manual → click Auto → popover shrinks flush to the status
+  line; click Manual → grows back with all sliders visible.
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)
