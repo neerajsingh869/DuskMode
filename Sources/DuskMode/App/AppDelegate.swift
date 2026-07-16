@@ -28,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
 
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
+    private lazy var settingsWindowController = SettingsWindowController(
+        circadianEngine: circadianEngine, launchAtLogin: launchAtLogin)
 
     let overlayEngine = OverlayEngine()
     let gammaEngine = GammaEngine()
@@ -220,7 +222,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
             button.image = NSImage(systemSymbolName: "moon.stars.fill",
                                    accessibilityDescription: "DuskMode")
             button.image?.isTemplate = true   // adapts to light/dark menu bar
-            button.action = #selector(togglePopover)
+            // Left-click = the quick popover (nightly controls). Right-click = a
+            // standard secondary menu (Settings…/About/Quit) — kept off the popover
+            // since those are set-once actions, not something touched nightly.
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.action = #selector(statusItemClicked)
             button.target = self
         }
     }
@@ -233,6 +239,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
             emergencyController: self)
     }
 
+    @objc private func statusItemClicked() {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showStatusMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
     @objc private func togglePopover() {
         guard let button = statusItem.button else { return }
         if popover.isShown {
@@ -241,6 +255,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
+    }
+
+    /// DuskMode previously had NO way to quit from the UI at all (found while
+    /// planning Phase 4) — this menu is also where that gap gets fixed.
+    private func showStatusMenu() {
+        guard let button = statusItem.button else { return }
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+            .target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "About DuskMode", action: #selector(showAbout), keyEquivalent: "")
+            .target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit DuskMode", action: #selector(quitApp), keyEquivalent: "q")
+            .target = self
+        menu.popUp(positioning: nil,
+                  at: NSPoint(x: 0, y: button.bounds.maxY + 4), in: button)
+    }
+
+    @objc private func openSettings() {
+        settingsWindowController.show()
+    }
+
+    @objc private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
     }
 
     // MARK: - Reacting to preference changes

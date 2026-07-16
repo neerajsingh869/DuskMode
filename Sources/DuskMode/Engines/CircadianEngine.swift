@@ -19,6 +19,17 @@ final class CircadianEngine {
     var isEnabled: Bool { timer != nil }
     var usesApproximateLocation: Bool { locationProvider.coordinates.isApproximate }
 
+    /// Today's full wind-down curve (for the Settings window's read-only chart) —
+    /// same construction `refresh()` uses for `currentTarget`, just exposing the
+    /// whole timeline instead of a single instant. Cheap pure maths; safe to
+    /// recompute on demand rather than caching.
+    var currentTimeline: CircadianTimeline {
+        CircadianTimeline.around(Date(),
+                                 latitude: locationProvider.coordinates.latitude,
+                                 longitude: locationProvider.coordinates.longitude,
+                                 bedtimeMinutes: prefs.bedtimeMinutes)
+    }
+
     private let prefs = PreferencesStore.shared
     private let locationProvider = LocationProvider()
     private var timer: Timer?

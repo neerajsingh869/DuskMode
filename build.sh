@@ -28,6 +28,7 @@ echo "==> Assembling app bundle…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/DuskMode"
+cp "$ROOT/research/citations.json" "$APP/Contents/Resources/citations.json"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
