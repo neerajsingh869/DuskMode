@@ -22,10 +22,6 @@ protocol ScreenStateControlling: AnyObject {
     /// independent peer (not schedule-owned) so it survives a later mode change, and
     /// edge-guards the system toggle so an unchanged state fires no stray bezel.
     func setManualGrayscale(_ enabled: Bool)
-    /// Whether DuskMode is registered to start automatically at login. Read fresh
-    /// from the OS (SMAppService), not mirrored into a pref.
-    var isLaunchAtLoginEnabled: Bool { get }
-    func setLaunchAtLoginEnabled(_ enabled: Bool)
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling {
@@ -48,9 +44,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         self.launchAtLogin = launchAtLogin
         super.init()
     }
-
-    var isLaunchAtLoginEnabled: Bool { launchAtLogin.isLaunchAtLoginEnabled }
-    func setLaunchAtLoginEnabled(_ enabled: Bool) { launchAtLogin.setLaunchAtLoginEnabled(enabled) }
 
     /// Last grayscale state the *schedule* asked for. Grayscale is only touched when
     /// this changes (edge-triggered): the macOS Colour Filters bezel would otherwise
@@ -133,8 +126,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
 
         // Register for launch-at-login once, the first time the app ever runs — the
         // whole point of DuskMode is unattended nightly automation, so it should
-        // survive a reboot without the user having to find a setting. The popover
-        // switch gives full manual control after this (on by default, not forced).
+        // survive a reboot without the user having to find a setting. No in-app
+        // toggle by design (matches how other menu bar apps handle this — e.g. Wispr
+        // Flow exposes no such control either): a user who wants it off can use
+        // System Settings → General → Login Items, same as for any other Mac app.
         if !PreferencesStore.shared.hasConfiguredLaunchAtLogin {
             launchAtLogin.setLaunchAtLoginEnabled(true)
             PreferencesStore.shared.hasConfiguredLaunchAtLogin = true

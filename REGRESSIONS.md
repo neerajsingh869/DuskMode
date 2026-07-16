@@ -423,18 +423,16 @@
   the app's core promise of unattended nightly automation).
 - **Fix:** `Utilities/LaunchAtLogin.swift` wraps the public `SMAppService.mainApp` API
   (macOS 13+, no plist hacks, no private symbols — rule #2). AppDelegate registers ONCE
-  on first-ever launch (`PreferencesStore.hasConfiguredLaunchAtLogin` latch — never
-  re-forces it after that, so a user who explicitly disables it via the popover switch
-  stays disabled). The popover's "Launch at Login" switch reads
-  `SMAppService.mainApp.status` fresh every open, never a mirrored pref — it can't drift
-  from System Settings → General → Login Items.
-- **Invariant:** launch-at-login state lives in the OS (`SMAppService`), never in
-  `PreferencesStore` (only the one-time "have we auto-registered yet" latch does). Don't
-  add a second source of truth (e.g. a `launchAtLoginEnabled` pref mirroring the switch) —
-  it would drift the moment the user changes it from System Settings directly.
+  on first-ever launch (`PreferencesStore.hasConfiguredLaunchAtLogin` latch). Deliberately
+  NO in-app UI (settled 2026-07-16 — see CLAUDE.md): this is a "set once at install"
+  setting, not a nightly-use control, and none of Neeraj's other menu bar apps expose it
+  either. Opt-out is System Settings → General → Login Items, same as for any other app.
+- **Invariant:** launch-at-login state lives ONLY in the OS (`SMAppService`), never
+  mirrored into `PreferencesStore` (only the one-time "have we auto-registered yet" latch
+  does). Don't add a popover toggle for this — it was tried and deliberately removed;
+  don't re-add it without a fresh design conversation.
 - **Re-check:** fresh install → `sfltool dumpbtm` shows a DuskMode entry with
-  `Disposition: [enabled, …]` after first launch, no popover interaction needed. Toggling
-  the popover switch off → entry disposition drops `enabled`; toggling on → returns.
+  `Disposition: [enabled, …]` after first launch, no UI interaction needed.
 
 ---
 
