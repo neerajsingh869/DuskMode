@@ -22,6 +22,10 @@ protocol ScreenStateControlling: AnyObject {
     /// independent peer (not schedule-owned) so it survives a later mode change, and
     /// edge-guards the system toggle so an unchanged state fires no stray bezel.
     func setManualGrayscale(_ enabled: Bool)
+    /// Whether DuskMode is registered to start automatically at login. Read fresh
+    /// from the OS (SMAppService), not mirrored into a pref.
+    var isLaunchAtLoginEnabled: Bool { get }
+    func setLaunchAtLoginEnabled(_ enabled: Bool)
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling {
@@ -33,13 +37,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     let gammaEngine = GammaEngine()
     let grayscaleEngine: GrayscaleControlling
     let circadianEngine = CircadianEngine()
+    let launchAtLogin: LaunchAtLoginControlling
 
-    /// Grayscale is injectable so a recording double can exercise the ownership state
-    /// machine without touching real system grayscale; production uses GrayscaleEngine.
-    init(grayscaleEngine: GrayscaleControlling = GrayscaleEngine()) {
+    /// Grayscale and launch-at-login are injectable so a recording double can exercise
+    /// their state machines without touching real system state; production uses
+    /// GrayscaleEngine / LaunchAtLogin.
+    init(grayscaleEngine: GrayscaleControlling = GrayscaleEngine(),
+         launchAtLogin: LaunchAtLoginControlling = LaunchAtLogin()) {
         self.grayscaleEngine = grayscaleEngine
+        self.launchAtLogin = launchAtLogin
         super.init()
     }
+
+    var isLaunchAtLoginEnabled: Bool { launchAtLogin.isLaunchAtLoginEnabled }
+    func setLaunchAtLoginEnabled(_ enabled: Bool) { launchAtLogin.setLaunchAtLoginEnabled(enabled) }
 
     /// Last grayscale state the *schedule* asked for. Grayscale is only touched when
     /// this changes (edge-triggered): the macOS Colour Filters bezel would otherwise
@@ -119,6 +130,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
 
         setupStatusItem()
         setupPopover()
+
+        // Register for launch-at-login once, the first time the app ever runs — the
+        // whole point of DuskMode is unattended nightly automation, so it should
+        // survive a reboot without the user having to find a setting. The popover
+        // switch gives full manual control after this (on by default, not forced).
+        if !PreferencesStore.shared.hasConfiguredLaunchAtLogin {
+            launchAtLogin.setLaunchAtLoginEnabled(true)
+            PreferencesStore.shared.hasConfiguredLaunchAtLogin = true
+        }
 
         // Global shortcut → Emergency Color. Public Carbon hotkey (⌥⌘C), no
         // Accessibility permission needed. Nil if the combo is already taken.

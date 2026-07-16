@@ -42,10 +42,12 @@ final class PopoverViewController: NSViewController {
     private let warmthSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private let dimSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private let grayscaleSwitch = NSSwitch()
+    private let launchAtLoginSwitch = NSSwitch()
     private let emergencyButton = NSButton(title: "", target: nil, action: nil)
 
     private let bedtimeTitle = NSTextField(labelWithString: "Bedtime")
     private let grayscaleTitle = NSTextField(labelWithString: "Grayscale")
+    private let launchAtLoginTitle = NSTextField(labelWithString: "Launch at Login")
 
     // App whitelist: an in-context "pause for the app you're using" switch. The list
     // starts EMPTY on purpose — every escape hatch is one the user deliberately chose.
@@ -178,6 +180,16 @@ final class PopoverViewController: NSViewController {
         pauseCaption.preferredMaxLayoutWidth = Self.contentWidth
         pauseCaption.isSelectable = false
 
+        // Launch at Login: a durable setting (always available, like grayscale/pause) —
+        // registers via SMAppService so DuskMode survives a reboot/shutdown without a
+        // manual relaunch. Defaults on at first run; the switch below is full manual
+        // control after that.
+        launchAtLoginTitle.font = .systemFont(ofSize: 13)
+        launchAtLoginSwitch.target = self
+        launchAtLoginSwitch.action = #selector(launchAtLoginChanged)
+        launchAtLoginSwitch.toolTip = "Start DuskMode automatically when you log in, so it's already running after a restart."
+        let launchAtLoginRow = row(leading: launchAtLoginTitle, trailing: launchAtLoginSwitch)
+
         // Emergency Color: a momentary "real colours NOW" override. Suspends every
         // filter for 60s, then the wind-down (manual or schedule) resumes on its own.
         emergencyButton.bezelStyle = .rounded
@@ -199,6 +211,7 @@ final class PopoverViewController: NSViewController {
         let separator3 = separator()
         let separator4 = separator()
         let separator5 = separator()
+        let separator6 = separator()
         warmthRow = row(leading: warmthTitle, trailing: warmthValue)
         dimRow = row(leading: dimTitle, trailing: dimValue)
 
@@ -224,6 +237,8 @@ final class PopoverViewController: NSViewController {
             pauseRow,
             pauseCaption,
             separator5,
+            launchAtLoginRow,
+            separator6,
             emergencyButton,
             emergencyCaption
         ])
@@ -252,6 +267,8 @@ final class PopoverViewController: NSViewController {
         stack.setCustomSpacing(6, after: pauseRow)
         stack.setCustomSpacing(12, after: pauseCaption)
         stack.setCustomSpacing(10, after: separator5)
+        stack.setCustomSpacing(12, after: launchAtLoginRow)
+        stack.setCustomSpacing(10, after: separator6)
         stack.setCustomSpacing(6, after: emergencyButton)
 
         root.addSubview(stack)
@@ -320,6 +337,7 @@ final class PopoverViewController: NSViewController {
         let grayscaleOn = prefs.grayscaleOn
             || (emergencyController?.grayscaleSuspended ?? false)
         grayscaleSwitch.state = grayscaleOn ? .on : .off
+        launchAtLoginSwitch.state = (emergencyController?.isLaunchAtLoginEnabled ?? false) ? .on : .off
         updateValueLabels()
         updateScheduleStatus()
         updateEmergencyButton()
@@ -620,6 +638,10 @@ final class PopoverViewController: NSViewController {
         emergencyController?.setManualGrayscale(grayscaleSwitch.state == .on)
         // Grayscale alone makes Emergency Color meaningful, so refresh its enabled state.
         updateEmergencyButton()
+    }
+
+    @objc private func launchAtLoginChanged() {
+        emergencyController?.setLaunchAtLoginEnabled(launchAtLoginSwitch.state == .on)
     }
 
     @objc private func pauseSwitchChanged() {

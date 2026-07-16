@@ -29,6 +29,7 @@ final class PreferencesStore {
         static let cachedLatitude = "cachedLatitude"
         static let cachedLongitude = "cachedLongitude"
         static let whitelistedApps = "whitelistedApps"
+        static let hasConfiguredLaunchAtLogin = "hasConfiguredLaunchAtLogin"
     }
 
     /// First-launch values — also what the popover's "Reset to Defaults" restores.
@@ -118,6 +119,15 @@ final class PreferencesStore {
         if whitelisted { apps[bundleID] = name } else { apps.removeValue(forKey: bundleID) }
         defaults.set(apps, forKey: Key.whitelistedApps)
         notify()
+    }
+
+    /// One-time latch: has the app already registered itself for launch-at-login on
+    /// first run? After this, the popover switch has full manual control — we never
+    /// force it back on. (The actual enabled/disabled state lives in SMAppService, not
+    /// here — this flag only gates the one-time auto-registration.)
+    var hasConfiguredLaunchAtLogin: Bool {
+        get { defaults.bool(forKey: Key.hasConfiguredLaunchAtLogin) }
+        set { defaults.set(newValue, forKey: Key.hasConfiguredLaunchAtLogin) }
     }
 
     /// Last CoreLocation fix, so sunset stays accurate across launches even if

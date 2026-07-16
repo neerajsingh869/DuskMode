@@ -414,6 +414,28 @@
 - **Re-check:** open popover in Manual → click Auto → popover shrinks flush to the status
   line; click Manual → grows back with all sliders visible.
 
+## 22. App doesn't survive a reboot/shutdown — was never a login item
+- **Symptom:** Neeraj reported that after restarting or shutting down his Mac, DuskMode
+  is simply gone — no wind-down happens that evening unless he manually relaunches it.
+- **Root cause:** the app was never registered with macOS to start at login. Not a
+  regression in any engine — a missing piece of first-run setup that was always missing
+  (Phase 4's "launch-at-login" line item, just reached earlier because it directly broke
+  the app's core promise of unattended nightly automation).
+- **Fix:** `Utilities/LaunchAtLogin.swift` wraps the public `SMAppService.mainApp` API
+  (macOS 13+, no plist hacks, no private symbols — rule #2). AppDelegate registers ONCE
+  on first-ever launch (`PreferencesStore.hasConfiguredLaunchAtLogin` latch — never
+  re-forces it after that, so a user who explicitly disables it via the popover switch
+  stays disabled). The popover's "Launch at Login" switch reads
+  `SMAppService.mainApp.status` fresh every open, never a mirrored pref — it can't drift
+  from System Settings → General → Login Items.
+- **Invariant:** launch-at-login state lives in the OS (`SMAppService`), never in
+  `PreferencesStore` (only the one-time "have we auto-registered yet" latch does). Don't
+  add a second source of truth (e.g. a `launchAtLoginEnabled` pref mirroring the switch) —
+  it would drift the moment the user changes it from System Settings directly.
+- **Re-check:** fresh install → `sfltool dumpbtm` shows a DuskMode entry with
+  `Disposition: [enabled, …]` after first launch, no popover interaction needed. Toggling
+  the popover switch off → entry disposition drops `enabled`; toggling on → returns.
+
 ---
 
 ### Standing verification checklist (run after ANY engine/apply-path change)
