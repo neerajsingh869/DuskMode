@@ -154,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
            front.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             noteFrontmostApp(bundleID: front.bundleIdentifier, name: front.localizedName)
         }
+        autoPauseInstalledColorCriticalApps()
 
         // Reflect any persisted state on launch.
         preferencesChanged()
@@ -173,7 +174,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
         guard let bundleID else { return }   // agent processes without an ID — keep last known
         frontmostBundleID = bundleID
         frontmostAppName = name
+        // A colour-critical app the launch scan missed (installed elsewhere, or since
+        // launch) is added the first time it comes to the front.
+        autoPause([bundleID: name ?? bundleID])
         if updateAppPauseState() { applyEffectiveState() }
+    }
+
+    // MARK: - Colour-critical apps (Figma, Photoshop…) pause automatically (#23)
+
+    private func autoPauseInstalledColorCriticalApps() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let installed = InstalledApps.colorCritical()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.autoPause(installed)
+                if self.updateAppPauseState() { self.applyEffectiveState() }
+            }
+        }
+    }
+
+    /// Adds colour-critical apps to the pause list, each only once ever, so an app the
+    /// user removed stays removed.
+    private func autoPause(_ candidates: [String: String]) {
+        let prefs = PreferencesStore.shared
+        let add = ColorCriticalApps.toAutoAdd(installed: candidates,
+                                              alreadyPaused: Set(prefs.whitelistedApps.keys),
+                                              previouslyAutoAdded: prefs.autoPausedApps)
+        prefs.addAutoPaused(add)
     }
 
     /// Recompute whether the frontmost app pauses DuskMode; handles the grayscale

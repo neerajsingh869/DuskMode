@@ -263,6 +263,27 @@ do {
            "22:00 with 00:30 bedtime is the Warm segment (2.5 h out)")
 }
 
+print("ColorCriticalApps")
+
+do {
+    expect(ColorCriticalApps.matches("com.figma.Desktop"), "Figma is colour-critical")
+    expect(ColorCriticalApps.matches("com.adobe.PremierePro.24"), "versioned Premiere Pro matches its family")
+    expect(ColorCriticalApps.matches("com.seriflabs.affinityphoto2"), "Affinity Photo 2 matches its family")
+    expect(!ColorCriticalApps.matches("com.apple.Safari"), "Safari is not colour-critical")
+    expect(!ColorCriticalApps.matches("com.adobe.Photoshop.helper"), "exact entries don't swallow helper IDs")
+
+    let installed = ["com.figma.Desktop": "Figma", "com.adobe.Photoshop": "Adobe Photoshop",
+                     "com.apple.Safari": "Safari"]
+    let first = ColorCriticalApps.toAutoAdd(installed: installed, alreadyPaused: [], previouslyAutoAdded: [])
+    expect(Set(first.keys) == ["com.figma.Desktop", "com.adobe.Photoshop"],
+           "first launch adds every installed colour-critical app, nothing else")
+    // Regression guard: the user removed Figma with ✕ — it must not come back.
+    let afterRemoval = ColorCriticalApps.toAutoAdd(installed: installed,
+                                                   alreadyPaused: ["com.adobe.Photoshop"],
+                                                   previouslyAutoAdded: ["com.figma.Desktop", "com.adobe.Photoshop"])
+    expect(afterRemoval.isEmpty, "an app removed by the user is never re-added")
+}
+
 // MARK: - Verdict
 
 if failures == 0 {

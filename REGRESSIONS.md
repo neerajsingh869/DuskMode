@@ -436,6 +436,32 @@
 
 ---
 
+## 23. Figma/Photoshop tinted anyway — the pause list started empty
+- **Symptom:** Neeraj (2026-09-25): "I already have Figma and I don't see that feature
+  working." Figma got warmth + grayscale like any other app.
+- **Root cause:** not an engine bug. The pause list was deliberately empty by default
+  (2026-07-10, intentionality) and only filled from the popover's "Pause for [app]"
+  switch. He expected colour-critical apps to be detected on their own; the landing page
+  also implied it.
+- **Fix (his decision, 2026-09-25):** `DuskModeCore/ColorCriticalApps.swift` holds a
+  built-in list of colour-critical bundle IDs (exact, or `*` families for versioned IDs).
+  On launch, `Utilities/InstalledApps.swift` scans /Applications and ~/Applications
+  (2 levels deep, for Adobe's folders) and adds matches to the normal pause list.
+  `noteFrontmostApp` also adds a match the first time it comes to the front. Every
+  auto-added ID is remembered in `PreferencesStore.autoPausedApps`.
+- **Invariant:** each app is auto-added ONCE EVER. A user who removes Figma with ✕ must
+  never see it come back on the next launch (`toAutoAdd` excludes `previouslyAutoAdded`).
+  Auto-added apps use the exact same pause path as #18 (hue neutral, dim KEPT,
+  grayscale suspended), with no separate code path.
+- **Guard:** self-tests "an app removed by the user is never re-added" and family and
+  exact matching.
+- **Re-check (done 2026-09-25):** fresh build → `defaults read app.duskmode
+  whitelistedApps` lists Figma. With Auto at bedtime and Figma in front, gamma reads
+  0.264/0.264/0.264 and grayscale is off. Back to Terminal, it reads 0.264/0.137/0.000 and
+  grayscale is on.
+
+---
+
 ### Standing verification checklist (run after ANY engine/apply-path change)
 1. `swift run DuskModeSelfTest` — all green.
 2. `./build.sh release run` — single process, icon appears.

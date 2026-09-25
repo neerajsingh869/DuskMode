@@ -29,6 +29,7 @@ final class PreferencesStore {
         static let cachedLatitude = "cachedLatitude"
         static let cachedLongitude = "cachedLongitude"
         static let whitelistedApps = "whitelistedApps"
+        static let autoPausedApps = "autoPausedApps"
         static let hasConfiguredLaunchAtLogin = "hasConfiguredLaunchAtLogin"
     }
 
@@ -103,8 +104,9 @@ final class PreferencesStore {
     /// Apps that pause DuskMode while they're frontmost (bundle ID → display name,
     /// captured at add time so the list can be shown even when the app isn't running).
     /// Pausing drops warmth + grayscale for true colour; dimming stays — brightness is
-    /// the melatonin-critical layer and doesn't shift hue. Default: empty — every
-    /// escape hatch is one the user deliberately chose (Phase 3, intentionality).
+    /// the melatonin-critical layer and doesn't shift hue. Starts with any installed
+    /// colour-critical apps (Figma, Photoshop…, see `ColorCriticalApps`); everything
+    /// else is added by the user in context (Phase 3, intentionality).
     var whitelistedApps: [String: String] {
         (defaults.dictionary(forKey: Key.whitelistedApps) as? [String: String]) ?? [:]
     }
@@ -118,6 +120,22 @@ final class PreferencesStore {
         var apps = whitelistedApps
         if whitelisted { apps[bundleID] = name } else { apps.removeValue(forKey: bundleID) }
         defaults.set(apps, forKey: Key.whitelistedApps)
+        notify()
+    }
+
+    /// Colour-critical apps DuskMode has ever added to the pause list on its own.
+    /// Remembered so a user's removal sticks (REGRESSIONS #23).
+    var autoPausedApps: Set<String> {
+        Set(defaults.stringArray(forKey: Key.autoPausedApps) ?? [])
+    }
+
+    /// Add colour-critical apps to the pause list and remember they were auto-added.
+    func addAutoPaused(_ apps: [String: String]) {
+        guard !apps.isEmpty else { return }
+        var list = whitelistedApps
+        for (id, name) in apps { list[id] = name }
+        defaults.set(list, forKey: Key.whitelistedApps)
+        defaults.set(Array(autoPausedApps.union(apps.keys)), forKey: Key.autoPausedApps)
         notify()
     }
 
