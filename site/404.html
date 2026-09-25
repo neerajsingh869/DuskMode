@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Page not found · DuskMode</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/DuskMode/assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root{--bg:#FFFFFF;--head:#0A0A0A;--body:#525252;--muted:#737373;--line:rgba(0,0,0,.08);--ember-fill:#FF9F4A;--btn-bg:#0A0A0A;--btn-fg:#FFFFFF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#000000;--head:#FFFFFF;--body:#A1A1A1;--muted:#7C7C7C;--line:rgba(255,255,255,.09);--ember-fill:#FFA757;--btn-bg:#FFFFFF;--btn-fg:#000000}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#000000;--head:#FFFFFF;--body:#A1A1A1;--muted:#7C7C7C;--line:rgba(255,255,255,.09);--ember-fill:#FFA757;--btn-bg:#FFFFFF;--btn-fg:#000000}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;display:grid;place-items:center;background:var(--bg);color:var(--body);font:16px/1.6 "Geist",ui-sans-serif,-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:24px 16px}
+main{max-width:560px;display:grid;gap:18px}
+.sun{width:120px;height:60px;position:relative;overflow:hidden;border-bottom:1.5px solid var(--line)}
+.sun i{position:absolute;left:30px;width:60px;height:60px;border-radius:50%;background:var(--ember-fill);top:34px;box-shadow:0 0 40px var(--ember-fill)}
+.eyebrow{font:500 12px/1 "Geist Mono",ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+h1{margin:0;color:var(--head);font-size:clamp(2.4rem,7vw,3.8rem);line-height:1;letter-spacing:-.05em;font-weight:600;text-wrap:balance}
+a.btn{justify-self:start;display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:999px;background:var(--btn-bg);color:var(--btn-fg);font-weight:600;font-size:15px;text-decoration:none}
+a.btn:hover{opacity:.86}
+a:focus-visible{outline:2px solid var(--head);outline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+  <div class="sun" aria-hidden="true"><i></i></div>
+  <div class="eyebrow">404</div>
+  <h1>This page already set.</h1>
+  <p>There's nothing at this address. The rest of the evening is on the home page.</p>
+  <a class="btn" href="/DuskMode/">Back to DuskMode</a>
+</main>
+</body>
+</html>

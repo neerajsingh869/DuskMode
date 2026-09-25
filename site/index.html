@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DuskMode: let your Mac set with the sun</title>
+<meta name="description" content="DuskMode is a free, open-source Mac menu bar app that warms your screen at sunset, dims it past the lowest brightness key, and turns it gray before bed, timed from sleep research.">
+<link rel="canonical" href="https://neerajsingh869.github.io/DuskMode/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://neerajsingh869.github.io/DuskMode/">
+<meta property="og:title" content="DuskMode: let your Mac set with the sun">
+<meta property="og:description" content="DuskMode is a free, open-source Mac menu bar app that warms your screen at sunset, dims it past the lowest brightness key, and turns it gray before bed, timed from sleep research.">
+<meta property="og:image" content="https://neerajsingh869.github.io/DuskMode/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#FFFFFF; --surface:#FAFAFA; --raise:#FFFFFF; --line:rgba(0,0,0,.08); --line-strong:rgba(0,0,0,.15);
+  --head:#0A0A0A; --body:#525252; --muted:#737373;
+  --ember:#B4510B; --ember-fill:#FF9F4A;
+  --btn-bg:#0A0A0A; --btn-fg:#FFFFFF;
+  --good:#1F7A45; --warn:#9A6200;
+  --shadow-lg:0 1px 1px rgba(0,0,0,.04),0 30px 80px -30px rgba(0,0,0,.35);
+  --f:"Geist",ui-sans-serif,-apple-system,system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --mac-appearance:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#000000; --surface:#0A0A0A; --raise:#111111; --line:rgba(255,255,255,.09); --line-strong:rgba(255,255,255,.17);
+  --head:#FFFFFF; --body:#A1A1A1; --muted:#7C7C7C;
+  --ember:#FFA757; --ember-fill:#FFA757;
+  --btn-bg:#FFFFFF; --btn-fg:#000000;
+  --good:#4CC38A; --warn:#E5A93B;
+  --shadow-lg:0 0 0 1px rgba(255,255,255,.06),0 40px 100px -30px rgba(0,0,0,1);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#000000; --surface:#0A0A0A; --raise:#111111; --line:rgba(255,255,255,.09); --line-strong:rgba(255,255,255,.17);
+  --head:#FFFFFF; --body:#A1A1A1; --muted:#7C7C7C;
+  --ember:#FFA757; --ember-fill:#FFA757;
+  --btn-bg:#FFFFFF; --btn-fg:#000000;
+  --good:#4CC38A; --warn:#E5A93B;
+  --shadow-lg:0 0 0 1px rgba(255,255,255,.06),0 40px 100px -30px rgba(0,0,0,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--body);font-family:var(--f);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;margin:0}
+h1,h2,h3{color:var(--head);margin:0;text-wrap:balance;letter-spacing:-.035em;font-weight:600}
+p{margin:0}
+a{color:inherit}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono)}
+:focus-visible{outline:2px solid var(--ember);outline-offset:3px;border-radius:8px}
+.wrap{max-width:1180px;margin-inline:auto;padding-inline:clamp(16px,4vw,40px)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font:600 15px/1 var(--f);text-decoration:none;border-radius:999px;padding:0 22px;min-height:48px;border:1px solid transparent;cursor:pointer;transition:transform .15s ease,opacity .15s ease,border-color .15s ease,background-color .15s ease}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--btn-bg);color:var(--btn-fg)}
+.btn-primary:hover{opacity:.86}
+.btn-ghost{color:var(--head);border-color:var(--line-strong);background:transparent}
+.btn-ghost:hover{border-color:var(--head)}
+.btn-sm{min-height:38px;padding:0 16px;font-size:14px}
+
+
+/* ============ HERO: physically based sky ============ */
+.hero{position:relative;min-height:min(92svh,900px);display:flex;align-items:flex-end;overflow:hidden;color:#fff;isolation:isolate}
+#sky{position:absolute;inset:0;width:100%;height:100%;z-index:-2;display:block;background:linear-gradient(180deg,#27406e,#c96a3c 70%,#1b1a22 71%)}
+.hero::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,0) 55%,rgba(0,0,0,.45) 100%)}
+.topnav{position:absolute;top:0;left:0;right:0;z-index:5;padding-top:env(safe-area-inset-top,0px)}
+.topnav .wrap{display:flex;align-items:center;height:72px;gap:28px}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-weight:600;font-size:17px;letter-spacing:-.01em}
+.topnav nav{margin-left:auto;display:flex;align-items:center;gap:26px;font-size:14.5px}
+.topnav nav a{color:rgba(255,255,255,.82);text-decoration:none}
+.topnav nav a:hover{color:#fff}
+.topnav .gh{border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:8px 14px;display:inline-flex;gap:8px;align-items:center;color:#fff;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);background:rgba(255,255,255,.06)}
+@media (max-width:760px){.topnav nav a.hs{display:none}}
+.hero-body{width:100%;padding-block:140px clamp(40px,7vw,84px)}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:40px;align-items:end}
+@media (max-width:980px){.hero-grid{grid-template-columns:1fr}.hero-pop{display:none}}
+.hero .kicker{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12.5px;letter-spacing:.06em;color:rgba(255,255,255,.85);padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.kicker .sun{width:8px;height:8px;border-radius:50%;background:#FFB067;box-shadow:0 0 12px #FFB067}
+.hero h1{color:#fff;font-size:clamp(3rem,8.4vw,7.2rem);line-height:.95;letter-spacing:-.055em;margin-top:22px;max-width:11ch;text-shadow:0 2px 30px rgba(0,0,0,.18)}
+.hero .lede{color:rgba(255,255,255,.88);font-size:clamp(1.05rem,1.5vw,1.25rem);max-width:52ch;margin-top:22px}
+.hero .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+.hero .btn-primary{background:#fff;color:#000}
+.hero .btn-ghost{color:#fff;border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.06);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.hero .btn-ghost:hover{border-color:#fff}
+.hero .meta{display:flex;gap:6px 20px;flex-wrap:wrap;margin-top:26px;font-size:13px;color:rgba(255,255,255,.72)}
+
+/* ============ Faithful popover (matches the real app) ============ */
+.pop{width:362px;max-width:100%;border-radius:14px;padding:18px 18px 16px;font:14px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;position:relative;
+  background:rgba(236,236,236,.8);color:#1d1d1f;backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6);
+  box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 60px -20px rgba(0,0,0,.5);--pl:rgba(0,0,0,.1);--pm:#6e6e73;--seg:rgba(0,0,0,.07);--segon:#fff;--swoff:rgba(0,0,0,.12);--btn:#fff}
+.pop.dark{background:rgba(40,40,42,.78);color:#f5f5f7;box-shadow:0 0 0 .5px rgba(255,255,255,.14),0 30px 60px -20px rgba(0,0,0,.7);--pl:rgba(255,255,255,.12);--pm:#a1a1a6;--seg:rgba(255,255,255,.08);--segon:rgba(255,255,255,.26);--swoff:rgba(255,255,255,.16);--btn:rgba(255,255,255,.14)}
+.pop::before{content:"";position:absolute;top:-8px;left:50%;margin-left:-9px;border:9px solid transparent;border-top:0;border-bottom:8px solid rgba(236,236,236,.8)}
+.pop.dark::before{border-bottom-color:rgba(40,40,42,.78)}
+.pop .ph{display:flex;justify-content:space-between;align-items:baseline}
+.pop .ph b{font-size:15px;font-weight:700}
+.pop .ph span{font-size:13px;color:var(--pm)}
+.pop .sub{font-size:12.5px;color:var(--pm);margin-top:2px}
+.pop hr{border:0;border-top:1px solid var(--pl);margin:12px 0}
+.pop .seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--seg);border-radius:8px;padding:2px;text-align:center;font-size:13.5px;font-weight:500}
+.pop .seg span{padding:5px 0;border-radius:6px}
+.pop .seg .on{background:var(--segon);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.pop .row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:14px}
+.pop .time{border:1px solid var(--pl);border-radius:6px;padding:2px 8px;font-size:13px;font-variant-numeric:tabular-nums}
+.pop .cap{font-size:12.5px;color:var(--pm);margin-top:5px}
+.pop .status{font-size:12.5px;color:var(--pm);margin-top:6px;font-variant-numeric:tabular-nums;min-height:17px}
+.pop .sw{width:38px;height:22px;border-radius:11px;background:var(--swoff);position:relative;transition:background-color .4s}
+.pop .sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .4s}
+.pop .sw.on{background:#34c759}.pop .sw.on::after{transform:translateX(16px)}
+.pop .eb{margin-top:4px;text-align:center;background:var(--btn);border-radius:7px;padding:5px;font-weight:500;box-shadow:0 0 0 .5px var(--pl)}
+.hero-pop{justify-self:end;transform:translateY(-6px)}
+
+/* ============ sections ============ */
+section.s{padding-block:clamp(88px,11vw,150px)}
+.s-head{display:grid;gap:16px;max-width:760px;margin-bottom:56px}
+.s-head h2{font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.02}
+.s-head p{font-size:clamp(1.02rem,1.3vw,1.15rem);max-width:60ch}
+
+/* ============ SCROLLY: the evening on a MacBook ============ */
+.scrolly{position:relative;height:520vh}
+.sticky{position:sticky;top:0;height:100svh;display:grid;grid-template-columns:minmax(0,.62fr) minmax(0,1.38fr);gap:clamp(24px,4vw,64px);align-items:center;max-width:1320px;margin-inline:auto;padding-inline:clamp(16px,4vw,40px)}
+.steps{position:relative;display:grid;min-height:320px}
+.step{grid-area:1/1;align-self:center;display:grid;gap:14px;opacity:0;transform:translateY(18px);transition:opacity .5s ease,transform .5s ease;pointer-events:none}
+.step.on{opacity:1;transform:none;pointer-events:auto}
+.step .t{font-family:var(--mono);font-size:13px;color:var(--muted);display:flex;align-items:center;gap:10px}
+.step .t i{width:9px;height:9px;border-radius:50%;display:block;box-shadow:inset 0 0 0 1px var(--line-strong)}
+.step h3{font-size:clamp(1.8rem,3.4vw,2.8rem);line-height:1.04}
+.step p{font-size:1.05rem;max-width:40ch}
+.rail{display:flex;gap:6px;margin-top:26px}
+.rail span{height:3px;flex:1;border-radius:2px;background:var(--line-strong);overflow:hidden;position:relative}
+.rail span b{position:absolute;inset:0;background:var(--head);transform-origin:left;transform:scaleX(0)}
+.live{display:flex;gap:22px;flex-wrap:wrap;margin-top:22px}
+.live div{display:grid;gap:2px}
+.live small{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.live b{font-family:var(--mono);font-weight:500;font-size:15px;color:var(--head)}
+.live .sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;box-shadow:inset 0 0 0 1px var(--line-strong)}
+
+/* MacBook */
+.mac{width:100%;max-width:980px;justify-self:center;filter:drop-shadow(0 40px 60px rgba(0,0,0,.28))}
+.lid{position:relative;background:#0b0b0c;border-radius:18px 18px 6px 6px;padding:1.7% 1.7% 2.4%;box-shadow:inset 0 0 0 1.5px #2a2a2c,inset 0 0 0 3px #0b0b0c,0 0 0 1px #9a9aa0}
+.notch{position:absolute;top:1.7%;left:50%;transform:translateX(-50%);width:13%;height:3.1%;background:#0b0b0c;border-radius:0 0 8px 8px;z-index:3}
+.display{position:relative;aspect-ratio:16/10;border-radius:6px;overflow:hidden;background:#000}
+.base{height:0;padding-bottom:3.3%;margin:0 -7.5%;background:linear-gradient(180deg,#e2e3e6 0%,#c8c9cd 45%,#9fa0a5 100%);border-radius:0 0 14px 14px/0 0 60% 60%;position:relative}
+.base::before{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);width:15%;height:38%;background:linear-gradient(180deg,#b7b8bc,#d2d3d6);border-radius:0 0 10px 10px}
+:root[data-theme="dark"] .base,
+.dark-base .base{background:linear-gradient(180deg,#4a4b50 0%,#34353a 50%,#1f2024 100%)}
+.canvas{position:absolute;left:0;top:0;width:1280px;height:800px;transform-origin:0 0}
+.scr{position:absolute;inset:0;transition:filter 1s ease}
+.scr-tint{position:absolute;inset:0;mix-blend-mode:multiply;pointer-events:none}
+#wall{position:absolute;inset:0;width:100%;height:100%;display:block;background:linear-gradient(180deg,#4a7fc1,#cfe0ee)}
+.mbar{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:20px;padding:0 18px;font:500 14px/1 -apple-system,system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.18);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
+.mbar .r{margin-left:auto;display:flex;gap:16px;align-items:center}
+.mbar .ic{display:inline-flex;padding:3px 6px;border-radius:5px;background:rgba(255,255,255,.22)}
+.win{position:absolute;border-radius:12px;overflow:hidden;box-shadow:0 30px 70px -20px rgba(0,0,0,.55),0 0 0 .5px rgba(0,0,0,.35)}
+.win img{display:block;width:100%;height:auto}
+.w1{left:60px;top:82px;width:560px}
+.w2{left:470px;top:250px;width:520px}
+.canvas .pop{position:absolute;right:120px;top:40px;transform:scale(.9);transform-origin:top right}
+.canvas .pop::before{left:auto;right:92px}
+.dock{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:10px;padding:9px 11px;border-radius:20px;background:rgba(255,255,255,.28);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);box-shadow:0 0 0 .5px rgba(255,255,255,.45)}
+.dock i{width:48px;height:48px;border-radius:12px;display:block;box-shadow:0 2px 5px rgba(0,0,0,.2)}
+@media (max-width:900px){
+  .scrolly{height:auto}
+  .sticky{position:relative;height:auto;grid-template-columns:1fr;padding-block:40px 70px}
+  .mac{order:-1;position:sticky;top:10px;z-index:2}
+  .steps{min-height:0;gap:56px;padding-top:40px}
+  .step{grid-area:auto;opacity:.35;transform:none}
+  .step.on{opacity:1}
+  .rail{display:none}
+}
+
+/* ============ layers (big type) ============ */
+.layers{display:grid;gap:0;border-top:1px solid var(--line)}
+.layer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 260px;gap:40px;padding-block:44px;border-bottom:1px solid var(--line);align-items:center}
+.layer h3{font-size:clamp(2rem,4vw,3.2rem);line-height:1}
+.layer h3 small{display:block;font:500 13px/1.4 var(--mono);letter-spacing:.02em;color:var(--muted);margin-top:12px}
+.layer p{font-size:1.02rem;max-width:48ch}
+.viz{height:120px;border-radius:14px;position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.viz-w{background:linear-gradient(90deg,#fff 0%,#ffe4c7 35%,#ffb875 70%,#ff8a1f 100%)}
+.viz-d{background:linear-gradient(90deg,#f2f2f2,#f2f2f2)}
+.viz-d::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.74))}
+.viz-g{background:linear-gradient(90deg,#ff5f6d,#ffc371,#47e5bc,#4facfe,#a770ef)}
+.viz-g::after{content:"";position:absolute;inset:0;backdrop-filter:grayscale(1);-webkit-backdrop-filter:grayscale(1);-webkit-mask:linear-gradient(90deg,transparent 20%,#000 80%);mask:linear-gradient(90deg,transparent 20%,#000 80%)}
+.viz span{position:absolute;bottom:10px;font:500 11px/1 var(--mono);color:rgba(0,0,0,.55)}
+.viz span.l{left:12px}.viz span.r{right:12px;color:rgba(255,255,255,.85)}
+.viz-w span.r{color:rgba(0,0,0,.6)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:999px;border:1px solid var(--line-strong);color:var(--body);margin-top:14px}
+.chip i{width:6px;height:6px;border-radius:50%;display:block}
+.chip.strong i{background:var(--good)}.chip.moderate i{background:var(--warn)}.chip.emerging i{background:#9a9a9a}
+@media (max-width:900px){.layer{grid-template-columns:1fr;gap:18px}}
+
+/* ============ bento ============ */
+.bento{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:28px;display:flex;flex-direction:column;gap:12px;min-height:280px;overflow:hidden;position:relative}
+.card h3{font-size:1.35rem;letter-spacing:-.02em}
+.card p{font-size:15px;max-width:44ch}
+.c3{grid-column:span 3}.c2{grid-column:span 2}.c4{grid-column:span 4}
+@media (max-width:980px){.bento{grid-template-columns:1fr 1fr}.c3,.c2,.c4{grid-column:span 2}}
+.keys{display:flex;gap:12px;margin-top:auto;padding-top:18px}
+.keys kbd{font:500 22px/1 var(--mono);width:72px;height:72px;display:grid;place-items:center;border-radius:14px;color:var(--head);background:var(--raise);border:1px solid var(--line-strong);box-shadow:0 5px 0 var(--line-strong),0 8px 18px -6px rgba(0,0,0,.2);transition:transform .12s ease,box-shadow .12s ease}
+.keys kbd.down{transform:translateY(4px);box-shadow:0 1px 0 var(--line-strong),0 3px 8px -4px rgba(0,0,0,.2)}
+.ring{margin-left:auto;align-self:center;width:72px;height:72px}
+.apps{display:grid;gap:10px;margin-top:auto}
+.app{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--raise);border:1px solid var(--line)}
+.app .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#fff;font:700 13px/1 var(--f)}
+.app b{font-weight:500;color:var(--head);font-size:14px}
+.app .tg{margin-left:auto;width:36px;height:21px;border-radius:11px;background:var(--line-strong);position:relative}
+.app .tg::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.app .tg.on{background:#34c759}.app .tg.on::after{left:17px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:auto}
+.split div{border-radius:12px;height:110px;position:relative;box-shadow:inset 0 0 0 1px var(--line);background:linear-gradient(135deg,#3a7bd5,#00d2ff 40%,#f7971e)}
+.split div.you::after{content:"";position:absolute;inset:0;border-radius:12px;mix-blend-mode:multiply;background:rgb(255,158,88)}
+.split small{position:absolute;left:10px;bottom:9px;font:500 11px/1 var(--mono);color:#fff;z-index:2;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.arc{margin-top:auto;width:100%;height:auto}
+.big{font-size:clamp(3.2rem,6vw,4.6rem);font-weight:600;letter-spacing:-.05em;color:var(--head);line-height:1;margin-top:auto}
+
+/* ============ science ============ */
+.sci{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:48px;align-items:start}
+@media (max-width:980px){.sci{grid-template-columns:1fr}}
+.spec{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:26px}
+.spec svg{width:100%;height:auto;display:block}
+.spec .big{margin:0}
+.spec-top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.spec-top p{font-size:14px;max-width:32ch}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:7px}
+.srange{display:flex;gap:14px;align-items:center;margin-top:16px;font:500 12.5px/1 var(--mono);color:var(--muted)}
+.srange input{flex:1;accent-color:var(--head)}
+.studies{border-top:1px solid var(--line)}
+.study{padding:18px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.study .top{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.study h3{font-size:15.5px;letter-spacing:-.01em}
+.study .chip{margin:0}
+.study p{font-size:14.5px}
+.study a{font-size:13px;color:var(--muted);text-underline-offset:3px}
+.study.counter h3 em{font-style:normal;color:var(--warn)}
+.cmp-wrap{overflow-x:auto;margin-top:72px}
+table.cmp{width:100%;border-collapse:collapse;min-width:640px;font-size:15px}
+.cmp th,.cmp td{padding:15px 18px;border-bottom:1px solid var(--line);text-align:left}
+.cmp thead th{color:var(--head);font-weight:600}
+.cmp .us{background:var(--surface)}
+.cmp thead .us{border-radius:14px 14px 0 0}
+.cmp .y{color:var(--head)}.cmp .y::before{content:"✓  ";color:var(--good);font-weight:700}
+.cmp .n{color:var(--muted)}
+
+/* ============ install ============ */
+.inst{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:20px;align-items:start}
+@media (max-width:980px){.inst{grid-template-columns:1fr}}
+.term{border-radius:14px;overflow:hidden;background:#141414;box-shadow:var(--shadow-lg),0 0 0 .5px rgba(255,255,255,.12);color:#e6e6e6}
+.term .tb{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#232323;border-bottom:1px solid #000;font:500 12.5px/1 -apple-system,system-ui,sans-serif;color:#9a9a9a}
+.term .tb i{width:12px;height:12px;border-radius:50%;display:block}
+.term .tb i:nth-child(1){background:#ff5f57}.term .tb i:nth-child(2){background:#febc2e}.term .tb i:nth-child(3){background:#28c840}
+.term .tb span{margin-inline:auto;transform:translateX(-22px)}
+.term pre{margin:0;padding:22px 20px 26px;font:13.5px/1.75 var(--mono);white-space:pre-wrap;word-break:break-all;min-height:230px}
+.term .p{color:#6fdc8c}.term .d{color:#8a8a8a}.term .ok{color:#FFB067}
+.cursor{display:inline-block;width:8px;height:16px;background:#e6e6e6;vertical-align:-3px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.term-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:26px;display:grid;gap:16px}
+.panel h3{font-size:1.25rem;letter-spacing:-.02em}
+.ol{list-style:none;margin:0;padding:0;display:grid;gap:14px;counter-reset:n}
+.ol li{display:grid;grid-template-columns:28px 1fr;gap:12px;font-size:14.5px;counter-increment:n}
+.ol li::before{content:counter(n);width:26px;height:26px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line-strong);font:500 12px/1 var(--mono);color:var(--head)}
+.ol b{color:var(--head);font-weight:600}
+.gate{border-radius:12px;background:var(--raise);border:1px solid var(--line);padding:14px;display:flex;align-items:center;gap:12px;font-size:13px}
+.gate .fb{margin-left:auto;border-radius:7px;padding:6px 11px;background:#0a84ff;color:#fff;font-weight:500;white-space:nowrap}
+.fine{font-size:13px;color:var(--muted)}
+.req{display:flex;gap:8px 22px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:26px}
+
+/* ============ closing ============ */
+.close{position:relative;overflow:hidden;border-radius:28px;min-height:420px;display:flex;align-items:flex-end;color:#fff;isolation:isolate}
+#night{position:absolute;inset:0;width:100%;height:100%;z-index:-1;display:block;background:#05070d}
+.close .in{padding:clamp(28px,5vw,60px);display:grid;gap:18px;width:100%}
+.close h2{color:#fff;font-size:clamp(2.2rem,5vw,4rem);line-height:1}
+.close p{color:rgba(255,255,255,.75);max-width:56ch}
+.close .btn-primary{background:#fff;color:#000}
+.close .btn-ghost{color:#fff;border-color:rgba(255,255,255,.35)}
+.foot{display:flex;gap:10px 26px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted);padding-block:34px 60px}
+.foot a{color:var(--muted);text-decoration:none}.foot a:hover{color:var(--head)}
+.foot .me{margin-right:auto;color:var(--body)}
+
+
+/* ============ ROUND 3: shared scroll-sequence grammar ============ */
+.pin{position:relative}
+.pin>.stage{position:sticky;top:0;height:100svh;overflow:hidden}
+.srail{display:flex;gap:6px}
+.srail span{height:3px;flex:1;border-radius:2px;background:var(--line-strong);overflow:hidden;position:relative}
+.srail span b{position:absolute;inset:0;background:var(--head);transform-origin:left;transform:scaleX(0)}
+.readout{display:flex;gap:22px;flex-wrap:wrap}
+.readout div{display:grid;gap:2px}
+.readout small{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.readout b{font-family:var(--mono);font-weight:500;font-size:15px;color:var(--head);font-variant-numeric:tabular-nums}
+.readout .sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;box-shadow:inset 0 0 0 1px var(--line-strong)}
+
+/* mini Mac screen, shared by the stack and the detail scenes */
+.ms{position:relative;aspect-ratio:16/10;border-radius:10px;overflow:hidden;background:#000;box-shadow:0 0 0 1px var(--line-strong)}
+.ms-in{position:absolute;inset:0}
+.ms-wall{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.ms-bar{position:absolute;top:0;left:0;right:0;height:7%;display:flex;align-items:center;gap:4%;padding:0 3%;font:600 clamp(7px,1.1vw,11px)/1 -apple-system,system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.2);z-index:4}
+.ms-bar .r{margin-left:auto;display:flex;gap:10px;align-items:center;font-weight:500}
+.ms-bar .dm{display:inline-flex;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,.24)}
+.ms-win{position:absolute;border-radius:7px;overflow:hidden;background:#f4f4f5;box-shadow:0 14px 34px -10px rgba(0,0,0,.55),0 0 0 .5px rgba(0,0,0,.3);transition:none}
+.ms-win .tb{height:16px;display:flex;align-items:center;gap:4px;padding:0 7px;background:#e7e7e9;border-bottom:1px solid rgba(0,0,0,.08);font:600 8px/1 -apple-system,system-ui,sans-serif;color:#6e6e73}
+.ms-win .tb i{width:6px;height:6px;border-radius:50%;display:block}
+.ms-win .tb i:nth-child(1){background:#ff5f57}.ms-win .tb i:nth-child(2){background:#febc2e}.ms-win .tb i:nth-child(3){background:#28c840}
+.ms-win .tb span{margin-left:6px}
+.ms-photos{left:7%;top:13%;width:62%}
+.ms-photos .g{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px}
+.ms-photos img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:2px}
+.ms-figma{left:34%;top:24%;width:58%;background:#1e1e1e}
+.ms-figma .tb{background:#2c2c2c;color:#b3b3b3;border-color:#000}
+.ms-figma .fc{position:relative;padding:8% 7%;display:grid;grid-template-columns:repeat(4,1fr);gap:6%;background:#1e1e1e}
+.ms-figma .fc div{aspect-ratio:1;border-radius:4px}
+.ms-figma .fc div::after{content:attr(data-h);display:block;padding-top:108%;font:500 6.5px/1 ui-monospace,Menlo,monospace;color:#8a8a8a}
+.ms-dock{position:absolute;left:50%;bottom:2.5%;transform:translateX(-50%);display:flex;gap:1.1%;padding:.9% 1.2%;border-radius:8px;background:rgba(255,255,255,.28);width:34%;justify-content:center}
+.ms-dock i{flex:1;aspect-ratio:1;border-radius:22%;display:block}
+.ms-tint{position:absolute;inset:0;mix-blend-mode:multiply;pointer-events:none;z-index:6}
+
+/* ============ LAYERS: exploded stack ============ */
+#layers{height:340vh}
+.lstage{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(24px,4vw,64px);align-items:center;max-width:1320px;margin-inline:auto;padding-inline:clamp(16px,4vw,40px)}
+.lstage h2{font-size:clamp(2rem,4.2vw,3.4rem);line-height:1.02;margin-top:14px}
+.lrows{margin-top:30px;border-top:1px solid var(--line)}
+.lrow{padding:18px 0;border-bottom:1px solid var(--line);display:grid;gap:6px;opacity:.36;transition:opacity .45s ease}
+.lrow.on{opacity:1}
+.lrow h3{font-size:1.45rem;letter-spacing:-.025em;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.lrow h3 small{font:500 12px/1.4 var(--mono);color:var(--muted);letter-spacing:.02em}
+.lrow p{font-size:15px;max-width:46ch}
+.lrow .chip{margin-top:4px;justify-self:start}
+.lvis{position:relative;display:grid;gap:22px;justify-items:center}
+.stack3d{width:min(620px,100%);aspect-ratio:16/10;perspective:1800px;position:relative}
+.iso{position:absolute;inset:0;transform-style:preserve-3d;will-change:transform}
+.plane{position:absolute;inset:0;border-radius:12px;transform-style:preserve-3d;backface-visibility:hidden}
+.plane.screen .ms{height:100%;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.2),0 40px 60px -20px rgba(0,0,0,.45)}
+.pane{border:1px solid rgba(255,255,255,.55);will-change:transform,opacity}
+.pane .lb{position:absolute;left:14px;top:12px;font:500 12px/1.2 var(--mono);color:#fff;letter-spacing:.02em;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.pane .lb em{display:block;font-style:normal;opacity:.7;font-size:10.5px;margin-top:3px}
+.pw{background:linear-gradient(135deg,rgba(255,168,90,.42),rgba(255,120,40,.28));box-shadow:inset 0 0 40px rgba(255,160,80,.35)}
+.pd{background:linear-gradient(135deg,rgba(20,20,24,.5),rgba(0,0,0,.38))}
+.pg{background:linear-gradient(135deg,rgba(210,210,210,.42),rgba(150,150,150,.3))}
+.slot{border:1.5px dashed var(--line-strong)}
+.lcap{max-width:52ch;text-align:center;font-size:15px;color:var(--body);min-height:48px;opacity:0;transform:translateY(8px);transition:opacity .5s ease,transform .5s ease}
+.lcap.on{opacity:1;transform:none}
+.lcap b{color:var(--head);font-weight:600}
+@media (max-width:900px){
+  .lstage{grid-template-columns:1fr;align-content:center;gap:18px;padding-block:20px}
+  .lstage .eyebrow,.lstage h2{display:none}
+  .lvis{order:-1;gap:14px}
+  .lrows{margin-top:0}
+  .lrow{display:none;padding:12px 0;opacity:1}
+  .lrow.on{display:grid}
+  .lstage.done .lrow{display:none}
+  .lcap{min-height:0;font-size:14px}
+}
+
+/* ============ DETAILS: horizontal track ============ */
+#details{height:680vh}
+.dstage{display:flex;flex-direction:column;justify-content:center;gap:clamp(20px,3.2vh,36px)}
+.dhead{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;flex-wrap:wrap;width:100%}
+.dhead h2{font-size:clamp(2rem,4.2vw,3.4rem);line-height:1.02;margin-top:14px}
+.dhead .srail{width:min(260px,100%);margin-bottom:10px}
+.track{display:flex;gap:20px;padding-inline:max(clamp(16px,4vw,40px),calc((100vw - 1180px)/2 + clamp(16px,4vw,40px)));will-change:transform}
+.scene{flex:0 0 min(1100px,84vw);height:clamp(440px,calc(100svh - 280px),640px);display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr);gap:clamp(24px,3.4vw,48px);align-items:center;padding:clamp(24px,3.4vw,44px);background:var(--surface);border:1px solid var(--line);border-radius:22px;overflow:hidden}
+.scene .txt{display:grid;gap:14px;align-content:center}
+.scene h3{font-size:clamp(1.5rem,2.4vw,2.1rem);letter-spacing:-.035em;line-height:1.08}
+.scene p{font-size:15.5px;max-width:42ch}
+.scene .readout{margin-top:10px}
+.scene .vis{position:relative;min-width:0}
+.keys2{display:flex;gap:10px;align-items:center;margin-top:6px}
+.keys2 kbd{font:500 19px/1 var(--mono);width:56px;height:56px;display:grid;place-items:center;border-radius:12px;color:var(--head);background:var(--raise);border:1px solid var(--line-strong);box-shadow:0 5px 0 var(--line-strong),0 8px 18px -6px rgba(0,0,0,.2);transition:transform .1s ease,box-shadow .1s ease}
+.keys2 kbd.down{transform:translateY(4px);box-shadow:0 1px 0 var(--line-strong),0 3px 8px -4px rgba(0,0,0,.2)}
+.keys2 .ring{width:60px;height:60px;margin-left:8px}
+.prow{position:absolute;right:4%;top:10%;z-index:7;display:flex;align-items:center;gap:10px;padding:8px 10px 8px 12px;border-radius:10px;background:rgba(40,40,42,.82);color:#f5f5f7;font:500 11.5px/1 -apple-system,system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 10px 30px -8px rgba(0,0,0,.6)}
+.prow .sw{width:28px;height:16px;border-radius:8px;background:rgba(255,255,255,.2);position:relative;transition:background-color .3s}
+.prow .sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform .3s}
+.prow .sw.on{background:#34c759}.prow .sw.on::after{transform:translateX(12px)}
+.wipe{position:relative}
+.wipe .top{position:absolute;inset:0}
+.wipe .line{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.25);z-index:8;transform:translateX(-1px)}
+.wipe .tag{position:absolute;bottom:8%;z-index:9;font:500 11px/1 var(--mono);color:#fff;padding:6px 9px;border-radius:999px;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);white-space:nowrap}
+.wipe .tag.l{left:3%}.wipe .tag.r{right:3%}
+.sunsvg{width:100%;height:auto;display:block}
+.mterm{border-radius:12px;overflow:hidden;background:#141414;color:#e6e6e6;box-shadow:var(--shadow-lg),0 0 0 .5px rgba(255,255,255,.12)}
+.mterm .tb{height:32px;display:flex;align-items:center;gap:7px;padding:0 12px;background:#232323;border-bottom:1px solid #000;font:500 11.5px/1 -apple-system,system-ui,sans-serif;color:#9a9a9a}
+.mterm .tb i{width:11px;height:11px;border-radius:50%;display:block}
+.mterm .tb i:nth-child(1){background:#ff5f57}.mterm .tb i:nth-child(2){background:#febc2e}.mterm .tb i:nth-child(3){background:#28c840}
+.mterm pre{margin:0;padding:18px 18px 22px;font:13px/1.8 var(--mono);white-space:pre-wrap;word-break:break-all;min-height:210px}
+.mterm .p{color:#6fdc8c}.mterm .d{color:#8a8a8a}
+.zero{display:flex;align-items:baseline;gap:12px;margin-top:18px}
+.zero .big{margin:0;font-size:clamp(3rem,5vw,4.2rem)}
+.zero span{font:500 13px/1.3 var(--mono);color:var(--muted)}
+@media (max-width:900px){
+  #details{height:auto}
+  #details>.stage{position:relative;height:auto;overflow:visible;padding-block:88px 40px}
+  .dhead .srail{display:none}
+  .track{flex-direction:column;gap:14px;padding-inline:clamp(16px,4vw,40px);transform:none!important}
+  .scene{flex:none;height:auto;grid-template-columns:1fr;gap:22px}
+  .scene .vis{order:-1}
+}
+
+/* ============ SCIENCE: pinned spectrum ============ */
+#science{height:320vh}
+.sstage{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(28px,4vw,56px);align-items:center;max-width:1180px;margin-inline:auto;padding-inline:clamp(16px,4vw,40px)}
+.sstage h2{font-size:clamp(2rem,3.8vw,3.1rem);line-height:1.04;margin:12px 0 22px}
+.sstage .spec{padding:22px}
+.spec .readout{margin-top:14px;justify-content:space-between;align-items:flex-end}
+.spec .srail{margin-top:14px}
+.studies .study{transition:opacity .45s ease;opacity:.34;position:relative;padding-left:16px}
+.studies .study::before{content:"";position:absolute;left:0;top:18px;bottom:18px;width:2px;border-radius:2px;background:var(--ember-fill);transform:scaleY(0);transform-origin:top;transition:transform .45s ease}
+.studies .study.on{opacity:1}
+.studies .study.on::before{transform:scaleY(1)}
+.study .when{font:500 11.5px/1 var(--mono);color:var(--muted);letter-spacing:.02em}
+@media (max-width:980px){
+  #science{height:auto}
+  #science>.stage{position:relative;height:auto;overflow:visible;padding-block:88px 40px}
+  .sstage{grid-template-columns:1fr;align-items:start}
+  .sstage .spec-wrap{position:sticky;top:8px;z-index:3;background:var(--bg);padding-bottom:8px}
+  .studies .study{padding-block:34px}
+}
+
+/* ============ INSTALL: menu bar arrival ============ */
+.mbstrip{height:30px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 14px;background:#2a2a2c;color:#e6e6e6;font:500 12.5px/1 -apple-system,system-ui,sans-serif;border-bottom:1px solid #000}
+.mbstrip .dmi{display:inline-flex;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,.2);transform:scale(0);opacity:0;transition:transform .5s cubic-bezier(.2,1.5,.4,1),opacity .3s ease}
+.mbstrip .dmi.on{transform:none;opacity:1}
+.mbstrip svg{display:block}
+.term.linked{border-radius:0 0 14px 14px}
+.term .ln{display:block}
+.term .ln[hidden]{display:none}
+
+/* ============ CLOSE: night grows to full screen ============ */
+#closing{height:230vh}
+.cstage .close{position:absolute;inset:0;border-radius:0;min-height:0;will-change:clip-path}
+.close .in{position:absolute;left:calc(var(--s,0px) + clamp(28px,5vw,60px));right:calc(var(--s,0px) + clamp(28px,5vw,60px));bottom:calc(var(--t,0px) + clamp(28px,5vw,60px));padding:0}
+.close .clock{font:500 13px/1 var(--mono);color:rgba(255,255,255,.72);letter-spacing:.04em;display:inline-flex;gap:10px;align-items:center}
+.close .clock i{width:8px;height:8px;border-radius:50%;background:#ff8a2a;box-shadow:0 0 10px #ff8a2a;display:block}
+.close h2,.close p,.close .ctas2{transition:opacity .6s ease,transform .6s ease}
+.close:not(.lit) h2,.close:not(.lit) p,.close:not(.lit) .ctas2{opacity:0;transform:translateY(14px)}
+.close h2{font-size:clamp(2.6rem,7.4vw,6.4rem);line-height:.96;letter-spacing:-.05em}
+
+/* reduced motion: every sequence shows its finished state, nothing pins */
+.rm .pin{height:auto!important}
+.rm .pin>.stage{position:relative;height:auto;overflow:visible;padding-block:88px}
+.rm .track{flex-direction:column;transform:none!important}
+.rm .scene{flex:none;height:auto}
+.rm #closing>.stage{height:100svh}
+.sstage .study{padding-block:11px;gap:4px}
+.sstage .study p{font-size:14px;line-height:1.5}
+.sstage .study::before{top:12px;bottom:12px}
+@media (max-height:760px) and (min-width:981px){.sstage .study a{display:none}.sstage h2{font-size:clamp(1.8rem,3vw,2.4rem)}}
+html,body{overflow-x:clip}
+@media (max-width:900px){.lcap:not(.on){display:none}.lstage{align-content:center}}
+@media (max-width:980px){.sstage .spec-top p,.sstage .legend{display:none}.sstage .spec .big{font-size:2.6rem}.sstage .spec{padding:16px}.sstage .spec-top{margin-bottom:6px}}
+
+/* ============ COMPARED: pinned spotlight ============ */
+#compare{height:560vh}
+.kstage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(28px,4.5vw,72px);align-items:center;max-width:1180px;margin-inline:auto;padding-inline:clamp(16px,4vw,40px)}
+.kstage h2{font-size:clamp(2rem,3.8vw,3.1rem);line-height:1.04;margin:12px 0 26px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.kstage .cmp{min-width:0;font-size:14px}
+.kstage .cmp th,.kstage .cmp td{padding:13px 10px}
+.kstage .cmp tbody th{font-weight:500;color:var(--head)}
+.kstage .cmp tbody tr{transition:opacity .45s ease}
+.kstage .cmp tbody tr:not(.act){opacity:.32}
+.kstage .cmp tbody tr .us{transition:background-color .45s ease,box-shadow .45s ease}
+.kstage .cmp tbody tr.act .us{background:var(--raise);box-shadow:inset 3px 0 0 var(--ember-fill)}
+.kstage .cmp tbody tr.act .us.y::before{color:var(--ember)}
+#krail{margin-top:24px}
+.kR{position:relative;display:grid}
+.spot{grid-area:1/1;display:grid;gap:14px;align-content:center;will-change:opacity,transform}
+.spot h3{font-size:clamp(1.5rem,2.4vw,2rem);letter-spacing:-.035em;line-height:1.1}
+.spot p{font-size:15.5px;max-width:46ch}
+.kvis{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px;min-height:300px;display:grid;align-content:center;gap:16px}
+.kvis svg{width:100%;height:auto;display:block}
+.kans{display:flex;gap:8px;flex-wrap:wrap;font:500 12px/1 var(--mono)}
+.kans span{padding:8px 11px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);display:inline-flex;gap:7px}
+.kans b{font-weight:500;color:var(--body)}
+.kans .us{border-color:var(--head);color:var(--head)}.kans .us b{color:var(--head)}
+.kans a{color:inherit;text-decoration:none}
+.kbar{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:center;font-size:14px;color:var(--head)}
+.kbar .tr{height:16px;border-radius:8px;background:var(--line);overflow:hidden;display:block}
+.kbar .fl{display:block;height:100%;border-radius:8px;transform-origin:left;transform:scaleX(0);box-shadow:inset 0 0 0 1px var(--line)}
+.kaxis{display:flex;justify-content:space-between;margin-left:110px;font:500 11.5px/1 var(--mono);color:var(--muted)}
+.kmeter{grid-template-columns:minmax(0,1fr) 150px;align-items:center}
+.mwrap{position:relative;height:210px}
+.mcol{position:absolute;left:0;top:0;bottom:0;width:38px;border-radius:12px;background:var(--line);overflow:hidden}
+.mfill{position:absolute;left:0;right:0;bottom:0;height:100%;background:var(--head);transform-origin:bottom;border-radius:0}
+.mlab{position:absolute;left:30px;font:500 11.5px/1 var(--mono);color:var(--body);white-space:nowrap;display:flex;align-items:center;gap:6px;transform:translateY(50%)}
+.mlab::before{content:"";width:16px;height:1.5px;background:var(--head)}
+.mlab2{color:var(--ember)}.mlab2::before{background:var(--ember-fill)}
+.kcode{background:#141414;color:#d6d6d6}
+.kcode .tb{height:32px;display:flex;align-items:center;gap:7px;padding:0 12px;background:#232323;border-bottom:1px solid #000;font:500 11.5px/1 var(--mono);color:#9a9a9a}
+.kcode .tb i{width:11px;height:11px;border-radius:50%;display:block}
+.kcode .tb i:nth-child(1){background:#ff5f57}.kcode .tb i:nth-child(2){background:#febc2e}.kcode .tb i:nth-child(3){background:#28c840}
+.kcode .tb span{margin-left:8px}
+.kcode pre{margin:0;padding:16px 16px 20px;font:12px/1.75 var(--mono);white-space:pre;overflow-x:auto}
+.kcode .ln{display:block;transition:opacity .35s ease}.kcode .ln.off{opacity:.1}
+.kcode .kw{color:#FFA757}.kcode .cm{color:#7c7c7c}
+@media (max-width:980px){
+  #compare{height:auto}
+  #compare>.stage{position:relative;height:auto;overflow:visible;padding-block:88px 40px}
+  .kstage{grid-template-columns:1fr}
+  .kstage .cmpw,#krail{display:none}
+  .spot{grid-area:auto;opacity:1!important;transform:none!important;padding-block:22px}
+  .kmeter{grid-template-columns:1fr 130px}
+}
+.rm .spot{grid-area:auto;opacity:1!important;transform:none!important;padding-block:22px}
+.scene{transform-origin:center;will-change:transform,opacity}
+@media (max-width:900px){.scene{transform:none!important;opacity:1!important}}
+.rm .scene{transform:none!important;opacity:1!important}
+
+/* ============ Figma window, grayscale preview switch, comparison score ============ */
+.ms-figma{left:27%;top:17%;width:60%}
+.ms-figma .fc{display:grid;grid-template-columns:18% 1fr;gap:0;padding:0;background:#1e1e1e}
+.ms-figma .fc div::after{content:none}
+.ms-figma .fl2{border-right:1px solid #000;padding:8px 6px;display:grid;gap:6px;align-content:start;background:#2c2c2c}
+.ms-figma .fl2 i{display:block;height:4px;border-radius:2px;background:#555}
+.ms-figma .fl2 i:nth-child(2){width:70%}.ms-figma .fl2 i:nth-child(3){width:85%}.ms-figma .fl2 i:nth-child(4){width:55%}
+.ms-figma .fg{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:12px}
+.ms-figma .fg div{display:grid;gap:4px;aspect-ratio:auto}
+.ms-figma .fg span{display:block;aspect-ratio:1.25;border-radius:5px}
+.ms-figma .fg em{font:500 7px/1 ui-monospace,Menlo,monospace;color:#8a8a8a;font-style:normal}
+.prow.hint{box-shadow:0 0 0 2px rgba(255,167,87,.7),0 10px 30px -8px rgba(0,0,0,.6)}
+.prow{transition:box-shadow .3s ease}
+.dctl{display:flex;flex-direction:column;align-items:flex-end;gap:16px;margin-bottom:10px}
+.dctl .srail{margin-bottom:0}
+.dsw{display:flex;align-items:center;gap:10px;font:500 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.seg2{display:inline-flex;padding:3px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface)}
+.seg2 button{font:500 13px/1 var(--f);letter-spacing:0;text-transform:none;border:0;background:transparent;color:var(--body);padding:8px 14px;border-radius:999px;cursor:pointer;min-height:32px;transition:background-color .2s ease,color .2s ease}
+.seg2 button[aria-pressed="true"]{background:var(--btn-bg);color:var(--btn-fg)}
+@media (max-width:900px){.dctl{align-items:flex-start;margin-top:14px}}
+#compare{height:660vh}
+.kstage .cmp.all tbody .us{background:var(--raise);box-shadow:inset 3px 0 0 var(--ember-fill)}
+.kstage .cmp.all tbody .us.y::before{color:var(--ember)}
+.kscore{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.kscore div{border:1px solid var(--line);border-radius:18px;padding:18px;display:grid;gap:8px;background:var(--surface)}
+.kscore small{font:500 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kscore b{font-size:clamp(2.2rem,3.6vw,3rem);font-weight:600;letter-spacing:-.04em;color:var(--muted);line-height:1;font-variant-numeric:tabular-nums}
+.kscore b span{font-size:.45em;letter-spacing:0}
+.kscore .us{border-color:var(--head)}.kscore .us b{color:var(--head)}
+.ksum .btn{margin-top:6px}
+.ms-figma{left:30%;top:19%;width:54%}
+.ms-figma .fg{gap:7px;padding:10px 12px 12px}
+.ms-figma .fg span{aspect-ratio:1.9;border-radius:4px}
+.ms-figma .fg em{font-size:6.5px}
+.ms-figma .fc{grid-template-columns:18% minmax(0,1fr)}
+.ms-figma .fc>div,.ms-figma .fg>div{aspect-ratio:auto;min-width:0}
+
+.ms{isolation:isolate}
+@media (max-width:980px){.sstage .spec-wrap{display:contents}.sstage .spec{position:sticky;top:8px;z-index:3}.sstage .spec-wrap .eyebrow,.sstage h2{grid-column:1}}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+
+<!-- ===================== HERO ===================== -->
+<header class="hero" id="top">
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <div class="topnav">
+    <div class="wrap">
+      <a class="brand" href="#top" aria-label="DuskMode home">
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><defs><clipPath id="hz"><rect width="24" height="14.5"/></clipPath></defs><circle cx="12" cy="14.5" r="7" fill="#FFB067" clip-path="url(#hz)"/><path d="M2.5 14.5h19M5.5 18.5h13M9 22h6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+        DuskMode
+      </a>
+      <nav aria-label="Primary">
+        <a class="hs" href="#evening">How it works</a>
+        <a class="hs" href="#science">Science</a>
+        <a class="hs" href="#install">Install</a>
+        <a class="gh" href="https://github.com/neerajsingh869/DuskMode"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Star on GitHub</a>
+      </nav>
+    </div>
+  </div>
+  <div class="hero-body">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="kicker"><span class="sun"></span><span id="kick">Tonight the sun sets around 6:14 PM in your time zone</span></span>
+        <h1>Let your screen set with the sun.</h1>
+        <p class="lede">DuskMode warms your Mac at sunset, dims it past the lowest brightness key, and turns it gray before bed. Every step is timed from sleep research. You never touch a slider.</p>
+        <div class="ctas">
+          <a class="btn btn-primary" href="#install"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg>Install free for Mac</a>
+          <a class="btn btn-ghost" href="#evening">See how an evening goes</a>
+        </div>
+        <div class="meta"><span>Free and open source</span><span>macOS 13+</span><span>No account, no network</span><span>0.0% CPU at idle</span></div>
+      </div>
+      <div class="hero-pop">
+        <div class="pop dark" id="heroPop"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ===================== SCROLLY ===================== -->
+<section class="scrolly" id="evening" aria-label="An evening with DuskMode">
+  <div class="sticky">
+    <div>
+      <div class="eyebrow">One evening, scroll to live it</div>
+      <div class="steps" id="steps"></div>
+      <div class="live" aria-live="polite">
+        <div><small>Time</small><b class="num" id="lvT">6:14 PM</b></div>
+        <div><small>Colour</small><b class="num"><span class="sw" id="lvS"></span><span id="lvK">6500 K</span></b></div>
+        <div><small>Dimming</small><b class="num" id="lvD">0%</b></div>
+        <div><small>Grayscale</small><b id="lvG">Off</b></div>
+      </div>
+      <div class="rail" id="rail"></div>
+    </div>
+    <div class="mac" id="mac">
+      <div class="lid"><div class="notch"></div>
+        <div class="display" id="display">
+          <div class="canvas" id="mcanvas">
+            <div class="scr" id="scr">
+              <canvas id="wall" aria-hidden="true"></canvas>
+              <div class="mbar"><b>DuskMode</b><span>File</span><span>Edit</span><span>Window</span>
+                <div class="r"><span class="ic"><svg width="18" height="14" viewBox="0 0 24 18" aria-hidden="true"><defs><clipPath id="hz3"><rect width="24" height="11"/></clipPath></defs><circle cx="12" cy="11" r="6.5" fill="#fff" clip-path="url(#hz3)"/><path d="M2 11h20M6 15h12" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><span id="mbT">Thu 6:14 PM</span></div>
+              </div>
+              <div class="win w1"><img id="imgTimeline" alt="DuskMode Settings, Timeline tab, showing tonight's warmth and dimming curves" width="900" height="800"></div>
+              <div class="win w2"><img id="imgScience" alt="DuskMode Settings, Science tab, listing the studies behind each layer" width="900" height="916"></div>
+              <div class="pop" id="macPop"></div>
+              <div class="dock" aria-hidden="true"><i style="background:linear-gradient(160deg,#5ac8fa,#007aff)"></i><i style="background:linear-gradient(160deg,#ffd60a,#ff9f0a)"></i><i style="background:linear-gradient(160deg,#30d158,#248a3d)"></i><i style="background:linear-gradient(160deg,#ff375f,#bf5af2)"></i><i style="background:linear-gradient(160deg,#ff9f0a,#ff453a)"></i><i style="background:linear-gradient(160deg,#64d2ff,#5e5ce6)"></i><i style="background:linear-gradient(160deg,#f2f2f7,#aeaeb2)"></i></div>
+            </div>
+            <div class="scr-tint" id="tint"></div>
+          </div>
+        </div>
+      </div>
+      <div class="base"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== LAYERS: exploded stack ===================== -->
+<section class="pin" id="layers" aria-label="The three layers">
+  <div class="stage lstage" id="lstage">
+    <div>
+      <div class="eyebrow">Three layers, one picture</div>
+      <h2>Warm first. Then dim. Then gray.</h2>
+      <div class="lrows">
+        <div class="lrow" data-i="0">
+          <h3>Warmth<small>From sunset · 6500 K to 1900 K</small></h3>
+          <p>Cuts blue near 464&nbsp;nm, where melatonin suppression peaks, and trims green near 555&nbsp;nm. Same display method as f.lux, so blacks stay black.</p>
+          <span class="chip strong"><i></i>Strong evidence</span>
+        </div>
+        <div class="lrow" data-i="1">
+          <h3>Dimming<small>From 2.5 h before bed · up to 80%</small></h3>
+          <p>Goes darker than your brightness keys can. Light level moves melatonin more than light colour, so this layer does the most.</p>
+          <span class="chip strong"><i></i>Strong evidence</span>
+        </div>
+        <div class="lrow" data-i="2">
+          <h3>Grayscale<small>From 1.5 h before bed</small></h3>
+          <p>Drains colour from feeds and thumbnails, so one more video is easier to skip.</p>
+          <span class="chip emerging"><i></i>Emerging evidence</span>
+        </div>
+      </div>
+    </div>
+    <div class="lvis">
+      <div class="stack3d" id="stack3d">
+        <div class="iso" id="iso">
+          <div class="plane screen" id="lsScreen"></div>
+          <div class="plane slot" data-slot="2"></div>
+          <div class="plane slot" data-slot="1"></div>
+          <div class="plane slot" data-slot="0"></div>
+          <div class="plane pane pg" data-pane="2"><span class="lb">Grayscale<em>colour filter · applied last</em></span></div>
+          <div class="plane pane pd" data-pane="1"><span class="lb">Dimming<em>display gamma</em></span></div>
+          <div class="plane pane pw" data-pane="0"><span class="lb">Warmth<em>display gamma</em></span></div>
+        </div>
+      </div>
+      <div class="readout" aria-live="polite">
+        <div><small>Time</small><b id="lsT">6:14 PM</b></div>
+        <div><small>Colour</small><b><span class="sw" id="lsS"></span><span id="lsK">6500 K</span></b></div>
+        <div><small>Dimming</small><b id="lsD">0%</b></div>
+        <div><small>Grayscale</small><b id="lsG">Off</b></div>
+      </div>
+      <p class="lcap" id="lcap"><b>Grayscale has the last word.</b> macOS applies it on top of everything else, so once it's on the screen is plain gray and the warm tint no longer shows. Dimming still does, which is why it matters most.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DETAILS: horizontal track ===================== -->
+<section class="pin" id="details" aria-label="The details">
+  <div class="stage dstage">
+    <div class="wrap dhead">
+      <div><div class="eyebrow">The details</div><h2>Stays out of your way.</h2></div>
+      <div class="dctl"><div class="dsw"><span>Grayscale</span><div class="seg2" role="group" aria-label="Preview these demos with grayscale on"><button type="button" data-dg="0" aria-pressed="true">Off</button><button type="button" data-dg="1" aria-pressed="false">On</button></div></div><div class="srail" id="drail"><span><b></b></span><span><b></b></span><span><b></b></span><span><b></b></span><span><b></b></span></div></div>
+    </div>
+    <div class="track" id="track">
+      <article class="scene" data-scene="emergency">
+        <div class="txt">
+          <h3>Need colour for a minute?</h3>
+          <p>Press Option, Command, C. Full colour comes back for 60 seconds, then the evening eases back in on its own.</p>
+          <div class="keys2" aria-hidden="true"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>C</kbd>
+            <svg class="ring" viewBox="0 0 72 72"><circle cx="36" cy="36" r="30" fill="none" stroke="var(--line-strong)" stroke-width="5"/><circle class="ra" cx="36" cy="36" r="30" fill="none" stroke="var(--ember-fill)" stroke-width="5" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5" transform="rotate(-90 36 36)"/><text class="rt" x="36" y="41" text-anchor="middle" font-family="var(--mono)" font-size="14" fill="var(--head)">60</text></svg>
+          </div>
+          <div class="readout"><div><small>Screen</small><b class="e1">Evening</b></div><div><small>Colour</small><b class="e2">2500 K</b></div></div>
+        </div>
+        <div class="vis"></div>
+      </article>
+      <article class="scene" data-scene="pause">
+        <div class="txt">
+          <h3>True colour for the apps that need it.</h3>
+          <p>Figma, Photoshop and other colour-critical apps pause DuskMode on their own. Bring one to the front and your colours come back. For any other app, flip one switch. Dimming stays on, so switching never flashes bright.</p>
+          <div class="readout"><div><small>In front</small><b class="p1">Safari</b></div><div><small>Colour</small><b class="p2">2500 K</b></div><div><small>Dimming</small><b class="p3">35%</b></div></div>
+        </div>
+        <div class="vis"></div>
+      </article>
+      <article class="scene" data-scene="calls">
+        <div class="txt">
+          <h3>Invisible on calls.</h3>
+          <p>The filter is applied at the display, after anything captures the screen. Zoom, Meet and screenshots get normal colours while you keep the warm ones.</p>
+          <p class="fine">Tested with Apple's ScreenCaptureKit: a white pixel reads 255, 255, 255 with the filter on.</p>
+        </div>
+        <div class="vis"></div>
+      </article>
+      <article class="scene" data-scene="sun">
+        <div class="txt">
+          <h3>Your sunset, not a guess.</h3>
+          <p>DuskMode works out sunset on your Mac with NOAA's solar equations, then builds tonight around it and your bedtime. Your location never leaves the Mac.</p>
+          <div class="readout"><div><small>Sunset</small><b class="u1">6:14 PM</b></div><div><small>Bedtime</small><b>11:00 PM</b></div></div>
+          <p class="fine" id="sunNote">This page estimates it from your time zone, the same fallback the app uses.</p>
+        </div>
+        <div class="vis"><svg class="sunsvg" viewBox="0 0 600 300" role="img" aria-label="Today's sun path and tonight's timeline"></svg></div>
+      </article>
+      <article class="scene" data-scene="private">
+        <div class="txt">
+          <h3>Private by design.</h3>
+          <p>No account, no analytics, no update checks. Ask macOS which network connections DuskMode has open. It prints nothing, because there is nothing to print.</p>
+          <div class="zero"><div class="big num z0">0</div><span>open network<br>connections</span></div>
+        </div>
+        <div class="vis">
+          <div class="mterm"><div class="tb"><i></i><i></i><i></i></div><pre aria-label="Terminal: lsof shows no connections for DuskMode"><span class="p">~ %</span> <span class="cmd"></span><span class="out"></span><span class="cur cursor"></span></pre></div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SCIENCE: pinned spectrum ===================== -->
+<section class="pin" id="science" aria-label="The science">
+  <div class="stage sstage" id="sstage">
+    <div class="spec-wrap">
+      <div class="eyebrow">The science</div>
+      <h2>Built on 17 studies. Including the ones that disagree.</h2>
+      <div class="spec">
+        <div class="spec-top"><div class="big num" id="specPct">100%</div><p>of daytime melanopic light still reaching your eyes. Modelled from your display's red, green and blue output.</p></div>
+        <svg id="specSvg" viewBox="0 0 560 230" role="img" aria-label="Screen light spectrum against melatonin sensitivity"></svg>
+        <div class="legend"><span><i style="background:var(--ember)"></i>Light from your screen</span><span><i style="background:var(--head);opacity:.6"></i>Melatonin sensitivity</span></div>
+        <div class="readout"><div><small>Time</small><b id="spT">6:14 PM</b></div><div><small>Colour</small><b id="spK">6500 K</b></div><div><small>Dimming</small><b id="spD">0%</b></div><div><small>Grayscale</small><b id="spG">Off</b></div></div>
+        <div class="srail" id="srail"><span><b></b></span><span><b></b></span><span><b></b></span><span><b></b></span><span><b></b></span></div>
+      </div>
+    </div>
+    <div class="studies" id="studies">
+      <div class="study" data-a="0"><span class="when" data-w="0"></span><div class="top"><h3>Brainard et al., 2001</h3><span class="chip strong"><i></i>Strong</span></div><p>Melatonin suppression peaks at 464&nbsp;nm, across 72 people. Why the blue goes first.</p><a href="https://www.jneurosci.org/content/21/16/6405">Journal of Neuroscience ↗</a></div>
+      <div class="study" data-a="1"><span class="when" data-w="1"></span><div class="top"><h3>Gooley et al., 2010</h3><span class="chip moderate"><i></i>Moderate</span></div><p>Early in the evening, green light at 555&nbsp;nm suppresses melatonin as much as blue. Why green is trimmed too.</p><a href="https://pubmed.ncbi.nlm.nih.gov/20463367/">Science Translational Medicine ↗</a></div>
+      <div class="study" data-a="2"><span class="when" data-w="2"></span><div class="top"><h3>Brown et al., 2022</h3><span class="chip strong"><i></i>Strong</span></div><p>Expert consensus: under 10 lux in the evening, under 1 lux at sleep. This sets how deep dimming goes.</p><a href="https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3001571">PLOS Biology ↗</a></div>
+      <div class="study" data-a="3"><span class="when" data-w="3"></span><div class="top"><h3>Holte and Ferraro, 2020</h3><span class="chip emerging"><i></i>Emerging</span></div><p>Students on grayscale phones used them about 40 minutes less a day. Gray screens aren't warm, so from here dimming does the melatonin work.</p><a href="https://www.tandfonline.com/doi/full/10.1080/03623319.2020.1737461">The Social Science Journal ↗</a></div>
+      <div class="study counter" data-a="4"><span class="when" data-w="4"></span><div class="top"><h3><em>Disagrees:</em> Cochrane review, 2023</h3><span class="chip moderate"><i></i>Moderate</span></div><p>Blue-blocking glasses show no clear sleep benefit. They filter weakly and at any hour. DuskMode lowers the whole dose and times it.</p><a href="https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD013244.pub2/full">Cochrane Library ↗</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== COMPARED: pinned spotlight ===================== -->
+<section class="pin" id="compare" aria-label="Compared with Night Shift and f.lux">
+  <div class="stage kstage">
+    <div class="kL">
+      <div class="eyebrow">Compared</div>
+      <h2>What Night Shift and f.lux leave out.</h2>
+      <div class="cmpw">
+      <table class="cmp" id="cmp">
+        <thead><tr><th scope="col"><span class="sr">Feature</span></th><th scope="col">Night Shift</th><th scope="col">f.lux</th><th scope="col" class="us">DuskMode</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Warm colour on a schedule</th><td class="y">Yes</td><td class="y">Yes</td><td class="us y">Yes</td></tr>
+          <tr><th scope="row">Timed from your bedtime</th><td class="n">Sunset or set hours</td><td class="y">From wake time</td><td class="us y">Yes</td></tr>
+          <tr><th scope="row">Dims past the lowest brightness key</th><td class="n">No</td><td class="n">No</td><td class="us y">Up to 80%</td></tr>
+          <tr><th scope="row">Grayscale before bed, automatically</th><td class="n">No</td><td class="n">No</td><td class="us y">Yes</td></tr>
+          <tr><th scope="row">Open source</th><td class="n">No</td><td class="n">No</td><td class="us y">Yes</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="srail" id="krail"><span><b></b></span><span><b></b></span><span><b></b></span><span><b></b></span><span><b></b></span></div>
+    </div>
+    <div class="kR">
+      <div class="spot">
+        <h3>Warm colour on a schedule.</h3>
+        <p>All three do this. It's the baseline, and on its own it helps less than you'd think, because brightness matters more than colour.</p>
+        <div class="kvis">
+          <div class="kbar"><span>Night Shift</span><span class="tr"><span class="fl"></span></span></div>
+          <div class="kbar"><span>f.lux</span><span class="tr"><span class="fl"></span></span></div>
+          <div class="kbar"><span>DuskMode</span><span class="tr"><span class="fl"></span></span></div>
+          <div class="kaxis"><span>Sunset</span><span>Bedtime</span></div>
+        </div>
+        <div class="kans"><span>Night Shift<b>Yes</b></span><span>f.lux<b>Yes</b></span><span class="us">DuskMode<b>Yes</b></span></div>
+      </div>
+      <div class="spot">
+        <h3>Timed from your bedtime.</h3>
+        <p>Move your bedtime and the whole evening moves with it. Every step is counted back from when you actually sleep, not from when the sun happens to set.</p>
+        <div class="kvis"><svg viewBox="0 0 560 216" role="img" aria-label="DuskMode's evening steps moving with bedtime while Night Shift stays tied to sunset"></svg>
+          <div class="readout"><div><small>Bedtime</small><b class="kb">11:00 PM</b></div></div></div>
+        <div class="kans"><span>Night Shift<b>Sunset or set hours</b></span><span>f.lux<b>From wake time</b></span><span class="us">DuskMode<b>Yes</b></span></div>
+      </div>
+      <div class="spot">
+        <h3>Darker than your brightness keys go.</h3>
+        <p>Your keys stop at a floor that is still bright for a dark room. DuskMode keeps going, up to 80% lower, because light level moves melatonin more than colour does.</p>
+        <div class="kvis kmeter">
+          <div class="ms-host" id="kMs2"></div>
+          <div class="mwrap"><div class="mcol"><b class="mfill"></b></div><span class="mlab" style="bottom:34%">Keys stop here</span><span class="mlab mlab2" style="bottom:6.8%">DuskMode</span></div>
+          <div class="readout" style="grid-column:1/-1"><div><small>Dimming by</small><b class="kd">Brightness keys</b></div></div>
+        </div>
+        <div class="kans"><span>Night Shift<b>No</b></span><span>f.lux<b>No</b></span><span class="us">DuskMode<b>Up to 80%</b></span></div>
+      </div>
+      <div class="spot">
+        <h3>Grayscale before bed, on its own.</h3>
+        <p>At 9:30 PM colour drains from the screen by itself, so the feed loses its pull right when one more video is most tempting. macOS can do grayscale, but only when you remember to switch it on.</p>
+        <div class="kvis"><div id="kMs3"></div><div class="readout"><div><small>Time</small><b class="kg">9:00 PM</b></div></div></div>
+        <div class="kans"><span>Night Shift<b>No</b></span><span>f.lux<b>No</b></span><span class="us">DuskMode<b>Yes</b></span></div>
+      </div>
+      <div class="spot">
+        <h3>Open source. Read every line.</h3>
+        <p>Native Swift with no third-party code. This is the real function that turns a colour temperature into what your screen shows, straight from the repository.</p>
+        <div class="kvis" style="padding:0;overflow:hidden">
+          <div class="kcode"><div class="tb"><i></i><i></i><i></i><span>DuskModeCore/ColorTemperature.swift</span></div><pre><span class="ln"><span class="kw">public static func</span> kelvin(forWarmth warmth: Double) -> Double {</span><span class="ln">    <span class="kw">let</span> w = min(1, max(0, warmth))</span><span class="ln">    <span class="kw">return</span> neutralKelvin - w * (neutralKelvin - minKelvin)</span><span class="ln">}</span><span class="ln"> </span><span class="ln"><span class="cm">/// Per-channel multiplier (each 0…1; red is always 1) for a colour temperature.</span></span><span class="ln"><span class="kw">public static func</span> multiplier(forKelvin kelvin: Double) -> (r: Double, g: Double, b: Double) {</span><span class="ln">    <span class="kw">let</span> raw = blackbody(kelvin)</span><span class="ln">    <span class="kw">let</span> ref = blackbody(neutralKelvin)</span><span class="ln">    <span class="kw">return</span> (min(1, raw.r / ref.r),</span><span class="ln">            min(1, raw.g / ref.g),</span><span class="ln">            min(1, raw.b / ref.b))</span><span class="ln">}</span></pre></div>
+        </div>
+        <div class="kans"><span>MIT licence</span><span>50 self-tests</span><span class="us"><a href="https://github.com/neerajsingh869/DuskMode">Read the source ↗</a></span></div>
+      </div>
+      <div class="spot ksum">
+        <h3>Every row, in one free app.</h3>
+        <p>Night Shift and f.lux warm your screen. DuskMode also times the evening from your bedtime, dims past your keys and grays the screen before bed. Free, and open source.</p>
+        <div class="kscore"><div><small>Night Shift</small><b>1<span> / 5</span></b></div><div><small>f.lux</small><b>2<span> / 5</span></b></div><div class="us"><small>DuskMode</small><b>5<span> / 5</span></b></div></div>
+        <div><a class="btn btn-primary" href="#install">Install free for Mac</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== INSTALL ===================== -->
+<section class="s" id="install">
+  <div class="wrap">
+    <div class="s-head">
+      <div class="eyebrow">Install</div>
+      <h2>One line in Terminal. That's it.</h2>
+      <p>DuskMode isn't signed with a paid Apple certificate yet. Installing from Terminal skips the warning macOS shows for downloaded apps. You can read the script before you run it.</p>
+    </div>
+    <div class="inst">
+      <div>
+        <div class="mbstrip" aria-hidden="true"><span class="dmi" id="dmi"><svg width="18" height="14" viewBox="0 0 24 18"><defs><clipPath id="hz9"><rect width="24" height="11"/></clipPath></defs><circle cx="12" cy="11" r="6.5" fill="#fff" clip-path="url(#hz9)"/><path d="M2 11h20M6 15h12" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><svg width="16" height="12" viewBox="0 0 16 12" fill="#e6e6e6"><path d="M8 2.2c2.1 0 4 .8 5.4 2.2l1.2-1.2A9.3 9.3 0 0 0 8 .5 9.3 9.3 0 0 0 1.4 3.2l1.2 1.2A7.6 7.6 0 0 1 8 2.2Zm0 3.4c1.2 0 2.3.5 3.1 1.3l1.2-1.2A6 6 0 0 0 8 3.9a6 6 0 0 0-4.3 1.8l1.2 1.2A4.3 4.3 0 0 1 8 5.6Zm0 3.4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg><span id="mbClock">Thu 9:41 PM</span></div>
+        <div class="term linked" id="term">
+          <div class="tb"><i></i><i></i><i></i><span>Terminal — zsh</span></div>
+<pre id="termPre" aria-label="Terminal install example"><span class="ln"><span class="p">~ %</span> <span id="tcmd">curl -fsSL https://raw.githubusercontent.com/neerajsingh869/DuskMode/main/install.sh | bash</span></span><span class="ln" data-l><span class="d">==&gt;</span> Downloading DuskMode 1.0</span><span class="ln" data-l><span class="d">==&gt;</span> Moving it to /Applications</span><span class="ln" data-l data-open><span class="d">==&gt;</span> Opening DuskMode</span><span class="ln" data-l><span class="ok">✓ DuskMode is in your menu bar. Sleep well.</span></span><span class="ln" data-l><span class="p">~ %</span> <span class="cursor"></span></span></pre>
+        </div>
+        <div class="term-actions">
+          <button class="btn btn-primary" id="copy" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>Copy command</span></button>
+          <a class="btn btn-ghost" href="https://github.com/neerajsingh869/DuskMode/blob/main/install.sh">Read install.sh</a>
+          <span class="fine" id="copyMsg" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Prefer a normal download?</h3>
+        <ol class="ol">
+          <li><span>Download <b>DuskMode.dmg</b> and drag the app to Applications.</span></li>
+          <li><span>Open it. macOS says it can't check the developer. Click <b>Done</b>.</span></li>
+          <li><span>Open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. You only do this once.</span></li>
+        </ol>
+        <div class="gate" aria-hidden="true"><span>“DuskMode” was blocked to protect your Mac.</span><span class="fb">Open Anyway</span></div>
+        <a class="btn btn-ghost" href="https://github.com/neerajsingh869/DuskMode/releases/latest" style="justify-self:start">Download .dmg</a>
+      </div>
+    </div>
+    <div class="req"><span>macOS 13 Ventura or later</span><span>Apple Silicon</span><span>To uninstall, quit it and move it to the Bin</span></div>
+  </div>
+</section>
+
+<!-- ===================== CLOSE: night grows to full screen ===================== -->
+<section class="pin" id="closing" aria-label="Good night">
+  <div class="stage cstage">
+    <div class="close" id="closeCard">
+      <canvas id="night" aria-hidden="true"></canvas>
+      <div class="in">
+        <span class="clock"><i></i><span id="clk">10:52 PM · Red</span></span>
+        <h2>Good night, screen.</h2>
+        <p>Made by Neeraj Singh for his own evenings, then shared. Native Swift, no third-party code, 50 self-tests on the timeline maths. Every decision is written down in the repository.</p>
+        <div class="ctas2" style="display:flex;gap:12px;flex-wrap:wrap"><a class="btn btn-primary" href="#install">Install free</a><a class="btn btn-ghost" href="https://github.com/neerajsingh869/DuskMode">Read the source</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="wrap"><div class="foot"><span class="me">DuskMode 1.0 · MIT licence</span><a href="https://github.com/neerajsingh869/DuskMode">GitHub</a><a href="https://github.com/neerajsingh869/DuskMode/issues">Report a problem</a><a href="#science">Research</a></div></div>
+</main>
+
+
+<script>
+const IMG={"timeline-light": "assets/timeline-light.jpg", "timeline-dark": "assets/timeline-dark.jpg", "science-light": "assets/science-light.jpg", "science-dark": "assets/science-dark.jpg"};
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------------- DuskMode colour maths (ColorTemperature.swift) ---------------- */
+function bb(k){const t=Math.min(400,Math.max(10,k/100));let r,g,b;
+  if(t<=66){r=255;g=99.4708025861*Math.log(t)-161.1195681661}else{r=329.698727446*Math.pow(t-60,-0.1332047592);g=288.1221695283*Math.pow(t-60,-0.0755148492)}
+  if(t>=66)b=255;else if(t<=19)b=0;else b=138.5177312231*Math.log(t-10)-305.0447927307;
+  const n=v=>Math.min(255,Math.max(0,v))/255;return[n(r),n(g),n(b)];}
+const REF=bb(6500);
+const mult=k=>{const x=bb(k);return x.map((v,i)=>Math.min(1,v/REF[i]))};
+
+/* ---------------- NOAA sunset, estimated from time zone (app's own fallback) ---------------- */
+function sunTimes(){
+  const now=new Date(),tz=-now.getTimezoneOffset(),lon=tz/60*15,lat=25,rad=Math.PI/180;
+  const start=new Date(now.getFullYear(),0,0),doy=Math.floor((now-start)/864e5);
+  const g=2*Math.PI/365*(doy-1);
+  const eq=229.18*(0.000075+0.001868*Math.cos(g)-0.032077*Math.sin(g)-0.014615*Math.cos(2*g)-0.040849*Math.sin(2*g));
+  const dec=0.006918-0.399912*Math.cos(g)+0.070257*Math.sin(g)-0.006758*Math.cos(2*g)+0.000907*Math.sin(2*g)-0.002697*Math.cos(3*g)+0.00148*Math.sin(3*g);
+  const ha=Math.acos(Math.cos(90.833*rad)/(Math.cos(lat*rad)*Math.cos(dec))-Math.tan(lat*rad)*Math.tan(dec))/rad;
+  const rise=720-4*(lon+ha)-eq+tz, set=720-4*(lon-ha)-eq+tz;
+  return{rise,set,dec,lat};
+}
+const ST=sunTimes();
+const fmt=m=>{m=Math.round(m);let h=Math.floor(m/60)%24,mi=((m%60)+60)%60;const ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+String(mi).padStart(2,"0")+" "+ap};
+
+/* ---------------- tonight's timeline (CircadianTimeline anchors) ---------------- */
+const B=23*60, START=Math.min(ST.set,B-180);
+const A=[{m:START,k:6500,d:0},{m:START+30,k:5000,d:0},{m:B-150,k:3400,d:.2},{m:B-120,k:2700,d:.3},{m:B-60,k:1900,d:.5},{m:B,k:1900,d:.8}];
+for(let i=1;i<A.length;i++)A[i].m=Math.max(A[i].m,A[i-1].m+1);
+const NAMES=["Sunset","Sunset","Warm","Dusk","Red","Bedtime"], GRAY=B-90;
+function at(m){if(m<=A[0].m)return{k:6500,d:0,ph:"Daytime"};if(m>=B)return{k:1900,d:.8,ph:"Bedtime"};
+  for(let i=0;i<A.length-1;i++){const a=A[i],b=A[i+1];if(m>=a.m&&m<b.m){const f=(m-a.m)/(b.m-a.m);return{k:a.k+(b.k-a.k)*f,d:a.d+(b.d-a.d)*f,ph:NAMES[i]}}}}
+const EVENTS=[{m:B-150,n:"Warm"},{m:B-120,n:"Dusk"},{m:GRAY,n:"Grayscale"},{m:B-60,n:"Red"},{m:B,n:"Bedtime"}];
+const nextEv=m=>EVENTS.find(e=>e.m>m);
+$("kick").textContent=`Tonight the sun sets around ${fmt(ST.set)} in your time zone`;
+
+/* ---------------- faithful popover ---------------- */
+function popHTML(){return `<div class="ph"><b>DuskMode</b><span>Reset</span></div><div class="sub">Science-based evening wind-down</div><hr>
+<div class="seg"><span>Off</span><span>Manual</span><span class="on">Auto</span></div>
+<div class="row"><span>Bedtime</span><span class="time">11:00 PM</span></div><div class="status" data-status></div><hr>
+<div class="row"><span>Grayscale</span><span class="sw" data-sw></span></div><div class="cap">Drains colour so scrolling feels less gripping.</div><hr>
+<div class="row"><span>Pause for Safari</span><span class="sw"></span></div><div class="cap">True colour while this app is in front. Dimming stays.</div><hr>
+<div class="eb">Emergency Color</div><div class="cap">True colour for 60 s, then resumes. ⌥⌘C</div>`}
+$("heroPop").innerHTML=popHTML();$("macPop").innerHTML=popHTML();
+function statusFor(m){const s=at(m),n=nextEv(m);if(s.ph==="Daytime")return`Daytime · starts at sunset, ${fmt(START)}`;
+  return`${s.ph} · ${Math.round(s.k/100)*100} K · ${Math.round(s.d*100)}% dim`+(n?` · ${n.n} at ${fmt(n.m)}.`:".")}
+function setPop(el,m){el.querySelector("[data-status]").textContent=statusFor(m);el.querySelector("[data-sw]").classList.toggle("on",m>=GRAY)}
+
+/* ---------------- theme ---------------- */
+const isDark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches};
+function applyMacAppearance(){const d=isDark();$("imgTimeline").src=IMG[d?"timeline-dark":"timeline-light"];$("imgScience").src=IMG[d?"science-dark":"science-light"];$("macPop").classList.toggle("dark",d);$("mac").classList.toggle("dark-base",d);}
+function setTheme(t){const r=document.documentElement;t==="system"?r.removeAttribute("data-theme"):r.setAttribute("data-theme",t);
+  document.querySelectorAll("[data-th]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.th===t)));
+  applyMacAppearance();redrawSkies();updAll();}
+document.querySelectorAll("[data-th]").forEach(b=>b.addEventListener("click",()=>setTheme(b.dataset.th)));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>setTheme(document.documentElement.dataset.theme||"system"));
+
+/* ---------------- WebGL sky: Rayleigh + Mie single scattering ---------------- */
+const FS=`precision highp float;
+uniform vec2 uR;uniform float uEl;uniform float uAz;uniform float uPitch;uniform float uFov;uniform float uExp;uniform float uStars;uniform float uHills;
+#define PI 3.14159265
+vec2 rsi(vec3 o,vec3 d,float r){float a=dot(d,d),b=2.*dot(d,o),c=dot(o,o)-r*r,k=b*b-4.*a*c;if(k<0.)return vec2(1e5,-1e5);k=sqrt(k);return vec2((-b-k)/(2.*a),(-b+k)/(2.*a));}
+vec3 atmo(vec3 r,vec3 o,vec3 s){const float rP=6371e3,rA=6471e3;const vec3 kR=vec3(5.5e-6,13.e-6,22.4e-6);const float kM=21e-6,hR=8e3,hM=1.2e3,g=.758;
+ vec2 p=rsi(o,r,rA);if(p.x>p.y)return vec3(0);p.y=min(p.y,rsi(o,r,rP).x);float st=(p.y-p.x)/16.,t=0.;vec3 tR=vec3(0),tM=vec3(0);float oR=0.,oM=0.;
+ float mu=dot(r,s),mm=mu*mu,gg=g*g,pR=3./(16.*PI)*(1.+mm),pM=3./(8.*PI)*((1.-gg)*(mm+1.))/(pow(1.+gg-2.*mu*g,1.5)*(2.+gg));
+ for(int i=0;i<16;i++){vec3 q=o+r*(t+st*.5);float h=length(q)-rP,dR=exp(-h/hR)*st,dM=exp(-h/hM)*st;oR+=dR;oM+=dM;
+  float js=rsi(q,s,rA).y/8.,jt=0.,jR=0.,jM=0.;for(int j=0;j<8;j++){vec3 w=q+s*(jt+js*.5);float hj=length(w)-rP;jR+=exp(-hj/hR)*js;jM+=exp(-hj/hM)*js;jt+=js;}
+  vec3 at=exp(-(kM*(oM+jM)+kR*(oR+jR)));tR+=dR*at;tM+=dM*at;t+=st;}
+ return 22.*(pR*kR*tR+pM*kM*tM);}
+float h1(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n1(float x){float i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(h1(vec2(i,1.)),h1(vec2(i+1.,1.)),f);}
+float ridge(float x){return .045*n1(x*3.)+.022*n1(x*9.+4.)+.008*n1(x*27.);}
+void main(){vec2 uv=(gl_FragCoord.xy-.5*uR)/uR.y;vec3 d=normalize(vec3(uv.x*uFov,uv.y*uFov+uPitch,-1.));
+ vec3 s=normalize(vec3(sin(uAz)*cos(uEl),sin(uEl),-cos(uAz)*cos(uEl)));vec3 o=vec3(0,6372e3,0);
+ vec3 c;float hz=-0.004;
+ if(d.y>hz){c=atmo(d,o,s);float sd=dot(d,s);c+=vec3(1.,.72,.45)*smoothstep(.99985,.99995,sd)*18.*smoothstep(-.02,.01,s.y);
+  if(uStars>0.){vec2 gp=d.xz/max(d.y+.25,.05)*90.;vec2 id=floor(gp);float hh=h1(id);float st=step(.995,hh)*smoothstep(.22,0.,length(fract(gp)-.5))*(hh-.995)*200.;c+=vec3(st)*uStars*smoothstep(0.,.25,d.y);}}
+ else{vec3 rd=vec3(d.x,-d.y,d.z);c=atmo(rd,o,s)*.22;float ax=atan(d.x,-d.z)-atan(s.x,-s.z);float gl=exp(-ax*ax*900.)*exp(-(hz-d.y)*14.)*(.6+.4*sin(d.y*900.+d.x*40.));c+=vec3(1.,.55,.25)*gl*2.5*smoothstep(-.03,.02,s.y);}
+ if(uHills>0.){float x=d.x/(-d.z);float rh=ridge(x+3.)*uHills+hz;if(d.y<rh&&d.y>hz-.2){vec3 amb=atmo(normalize(vec3(d.x,.05,d.z)),o,s);c=amb*.08+vec3(.004,.005,.009);}}
+ c=1.-exp(-c*uExp);float up=smoothstep(.02,.55,d.y);c*=mix(vec3(1.),vec3(.52,.74,1.45),up*.85);c+=vec3(.005,.012,.035)*up;float L=dot(c,vec3(.2126,.7152,.0722));c=max(mix(vec3(L),c,1.35),0.);c=pow(c,vec3(.92));
+ gl_FragColor=vec4(c,1.);}`;
+const VS="attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
+function makeSky(canvas,scale){
+  const gl=canvas.getContext("webgl",{antialias:false,preserveDrawingBuffer:true});if(!gl)return null;
+  const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);return x};
+  const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pr);
+  if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return null;gl.useProgram(pr);
+  const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(pr,"p");gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  const U=n=>gl.getUniformLocation(pr,n);const u={R:U("uR"),El:U("uEl"),Az:U("uAz"),P:U("uPitch"),F:U("uFov"),E:U("uExp"),S:U("uStars"),H:U("uHills")};
+  let last="";
+  return function draw(o){const dpr=Math.min(devicePixelRatio||1,2)*scale;const w=o.w||Math.max(2,Math.round(canvas.clientWidth*dpr)),h=o.h||Math.max(2,Math.round(canvas.clientHeight*dpr));
+    const key=[w,h,o.el.toFixed(4),o.exp,o.stars,o.pitch,o.az,o.fov,o.hills].join();if(key===last)return;last=key;
+    if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+    gl.viewport(0,0,w,h);gl.uniform2f(u.R,w,h);gl.uniform1f(u.El,o.el);gl.uniform1f(u.Az,o.az||.35);gl.uniform1f(u.P,o.pitch||.09);gl.uniform1f(u.F,o.fov||.55);gl.uniform1f(u.E,o.exp);gl.uniform1f(u.S,o.stars||0);gl.uniform1f(u.H,o.hills==null?0:o.hills);
+    gl.drawArrays(gl.TRIANGLES,0,3);};
+}
+const deg=Math.PI/180;
+const skyHero=makeSky($("sky"),.5), skyWall=makeSky($("wall"),.6), skyNight=makeSky($("night"),.5);
+function heroParams(p){const d=isDark();const L=(a,b)=>a+(b-a)*p;
+  return d?{el:L(-.3,-3)*deg,exp:L(3.5,10),pitch:.28,fov:.9,az:.3,stars:Math.min(1,p*1.6)}:{el:L(2.5,-.3)*deg,exp:L(1.8,3.5),pitch:.28,fov:.9,az:.3,stars:0}}
+let heroP=0;
+function redrawSkies(){skyHero&&skyHero(heroParams(heroP));skyWall&&skyWall({el:5*deg,exp:1.5,pitch:.3,fov:.9,az:.25})}
+if(!skyHero)$("sky").style.background="linear-gradient(180deg,#27406e 0%,#7b6d8f 45%,#e0895a 68%,#1b1a22 70%)";
+
+/* ---------------- scrolly ---------------- */
+const STEPS=[
+  {m:START,t:"Sunset",h:"It begins on its own.",p:`At ${fmt(START)} the screen starts warming, so slowly you won't catch it happening. No dimming yet. Evening light is fine.`},
+  {m:B-150,t:"Warm",h:"Blue and green step back.",p:"By 8:30 PM the screen sits at 3400 K, like a lamp. Dimming begins at 20%."},
+  {m:B-120,t:"Dusk",h:"Darker than your keys allow.",p:"At 9:00 PM brightness drops to 30%, past where the brightness keys stop. This is the layer that matters most."},
+  {m:GRAY,t:"Grayscale",h:"The feed loses its pull.",p:"At 9:30 PM colour leaves the screen. macOS applies grayscale last, so the screen turns plain gray and the warm tint no longer shows. Dimming keeps the light low."},
+  {m:B,t:"Bedtime",h:"Deepest point. Good night.",p:"At 11:00 PM dimming reaches 80%, its deepest point, and holds there until sunrise."}];
+$("steps").innerHTML=STEPS.map((s,i)=>{const c0=mult(at(s.m).k),L0=.2126*c0[0]+.7152*c0[1]+.0722*c0[2],c=s.m>=GRAY?[L0,L0,L0]:c0;return`<div class="step" data-i="${i}"><div class="t"><i style="background:rgb(${c.map(v=>Math.round(v*255*(1-at(s.m).d*.92))).join(",")})"></i>${fmt(s.m)} · ${s.t}</div><h3>${s.h}</h3><p>${s.p}</p></div>`}).join("");
+$("rail").innerHTML=STEPS.map(()=>"<span><b></b></span>").join("");
+const stepEls=[...document.querySelectorAll(".step")],railEls=[...document.querySelectorAll("#rail b")];
+const T0=START-10,T1=B+5;
+function renderMac(m){const s=at(m),c=mult(s.k),f=1-s.d*.92,gray=m>=GRAY;const rgb=c.map(v=>Math.round(v*f*255)).join(",");
+  $("tint").style.background=`rgb(${rgb})`;$("mcanvas").style.filter=gray?"grayscale(1)":"none";
+  $("lvT").textContent=fmt(m);$("mbT").textContent="Thu "+fmt(m);$("lvK").textContent=Math.round(s.k/100)*100+" K";
+  $("lvS").style.background=gray?"#8a8a8a":`rgb(${c.map(v=>Math.round(v*255)).join(",")})`;$("lvD").textContent=Math.round(s.d*100)+"%";$("lvG").textContent=gray?"On":"Off";
+  setPop($("macPop"),m);}
+let lastStep=-1;
+function onScroll(){
+  const vh=innerHeight;
+  heroP=Math.min(1,Math.max(0,scrollY/(vh*.9)));skyHero&&skyHero(heroParams(heroP));
+  const sc=document.querySelector(".scrolly"),r=sc.getBoundingClientRect();
+  let p;
+  if(innerWidth<=900){ // stacked layout: follow the step nearest the middle
+    let best=0,bd=1e9;stepEls.forEach((e,i)=>{const b=e.getBoundingClientRect();const dd=Math.abs(b.top+b.height/2-vh*.62);if(dd<bd){bd=dd;best=i}});
+    p=best/(STEPS.length-1);
+  } else p=Math.min(1,Math.max(0,-r.top/(r.height-vh)));
+  const m=T0+(T1-T0)*p;renderMac(m);
+  const idx=STEPS.reduce((acc,s,i)=>m>=s.m-12?i:acc,0);
+  if(idx!==lastStep){stepEls.forEach((e,i)=>e.classList.toggle("on",i===idx));lastStep=idx}
+  railEls.forEach((b,i)=>{const a=i?STEPS[i-1].m:T0,z=STEPS[i].m;b.style.transform=`scaleX(${Math.min(1,Math.max(0,(m-a)/(z-a)))})`});
+  updAll();
+}
+let ticking=false;addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(()=>{ticking=false;onScroll()})}},{passive:true});
+addEventListener("resize",()=>{fitMac();redrawSkies();onScroll()});
+function fitMac(){$("mcanvas").style.transform=`scale(${$("display").clientWidth/1280})`}
+
+/* hero popover: the visitor's real current time */
+function nowMin(){const d=new Date();return d.getHours()*60+d.getMinutes()}
+setPop($("heroPop"),nowMin());setInterval(()=>setPop($("heroPop"),nowMin()),30000);
+
+/* ---------------- spectrum ---------------- */
+const G=(x,c,s)=>Math.exp(-.5*((x-c)/s)**2),mel=x=>G(x,480,42),emit=(x,r,g,b)=>b*G(x,455,11)+g*.92*G(x,535,22)+r*.85*G(x,612,13);
+let FULL=0;for(let x=400;x<=700;x+=2)FULL+=emit(x,1,1,1)*mel(x);
+
+
+/* ---------------- copy ---------------- */
+$("copy").addEventListener("click",()=>{const cmd="curl -fsSL https://raw.githubusercontent.com/neerajsingh869/DuskMode/main/install.sh | bash";
+  const ok=()=>{$("copy").querySelector("span").textContent="Copied";$("copyMsg").textContent="Now paste it into Terminal and press Return.";setTimeout(()=>$("copy").querySelector("span").textContent="Copy command",2200)};
+  const fb=()=>{const r=document.createRange();r.selectNodeContents($("termPre"));const s=getSelection();s.removeAllRanges();s.addRange(r);$("copyMsg").textContent="Selected. Press ⌘C to copy."};
+  try{navigator.clipboard.writeText(cmd).then(ok,fb)}catch(e){fb()}});
+
+/* ================= ROUND 3: one scroll engine for every sequence ================= */
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const seg=(p,a,b)=>clamp((p-a)/(b-a));
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const lerp=(a,b,t)=>a+(b-a)*t;
+if(reduce)document.documentElement.classList.add("rm");
+const pinP=el=>{const r=el.getBoundingClientRect();return clamp(-r.top/(r.height-innerHeight))};
+const passP=(el,a=.92,b=.35)=>{const r=el.getBoundingClientRect(),vh=innerHeight;return clamp((vh*a-r.top)/(vh*(a-b)))};
+const rgbOf=(k,d)=>mult(k).map(v=>Math.round(v*(1-d*.92)*255)).join(",");
+const kTxt=k=>Math.round(k/100)*100+" K";
+const pw=(p,pts)=>{if(p<=pts[0][0])return pts[0][1];for(let i=1;i<pts.length;i++)if(p<=pts[i][0])return lerp(pts[i-1][1],pts[i][1],(p-pts[i-1][0])/(pts[i][0]-pts[i-1][0]));return pts[pts.length-1][1]};
+const EM=B-75, ES=at(EM);
+const DM=B-105, DS=at(DM); let DG=0; // details demos: warm by default, grayscale is an opt-in preview
+/* inertia: sequences ease toward the scroll position instead of snapping to it */
+const SM={};let smNeed=false,smRun=false;
+function sm(key,v,k=.1){if(reduce)return v;if(!(key in SM))SM[key]=v;SM[key]+=(v-SM[key])*k;if(Math.abs(v-SM[key])>2e-4)smNeed=true;else SM[key]=v;return SM[key]}
+function smKick(){if(smNeed&&!smRun){smRun=true;requestAnimationFrame(function loop(){smNeed=false;updAll();if(smNeed)requestAnimationFrame(loop);else smRun=false})}} // 9:45 PM: the evening every demo starts from
+
+/* real-looking photos: stills from the same sky renderer */
+const stillCv=document.createElement("canvas");stillCv.style.cssText="position:fixed;left:-9999px;top:0;width:4px;height:4px";document.body.appendChild(stillCv);
+const skyStill=makeSky(stillCv,1);
+function still(o,w,h){if(!skyStill)return "";skyStill(Object.assign({w,h},o));return stillCv.toDataURL("image/jpeg",.86)}
+const PH=[{el:26*deg,exp:1.4,pitch:.22,fov:.9,az:.2,hills:1.2},{el:3.5*deg,exp:1.9,pitch:.1,fov:.7,az:.5},{el:.5*deg,exp:2.8,pitch:.05,fov:.5,az:.3},
+  {el:-1.4*deg,exp:5.5,pitch:.2,fov:.9,az:.1,hills:1},{el:9*deg,exp:1.6,pitch:.14,fov:.8,az:1.2,hills:1.5},{el:-3.8*deg,exp:10,pitch:.3,fov:.9,az:-.3,stars:1}].map(o=>still(o,240,180));
+const WALL=still({el:7*deg,exp:1.6,pitch:.3,fov:.9,az:.25,hills:.8},800,500);
+const DOCK=["#5ac8fa,#007aff","#ffd60a,#ff9f0a","#30d158,#248a3d","#ff375f,#bf5af2","#ff9f0a,#ff453a","#64d2ff,#5e5ce6"].map(g=>`<i style="background:linear-gradient(160deg,${g})"></i>`).join("");
+const SWATCH=["#FF9F4A","#FF453A","#30D158","#0A84FF","#BF5AF2","#FFD60A"];
+const DMI='<svg width="12" height="9" viewBox="0 0 24 18" aria-hidden="true"><path d="M5.5 11a6.5 6.5 0 0 1 13 0Z" fill="#fff"/><path d="M2 11h20M6 15h12" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>';
+function msHTML(o={}){const t="Thu "+fmt(o.m||EM);return `<div class="ms"><div class="ms-in"><img class="ms-wall" src="${WALL}" alt="">
+<div class="ms-bar"><span class="mapp">Safari</span><span style="font-weight:500">File</span><span style="font-weight:500">Edit</span><span style="font-weight:500">View</span><div class="r"><span class="dm">${DMI}</span><span>${t}</span></div></div>
+<div class="ms-win ms-photos"><div class="tb"><i></i><i></i><i></i><span>Safari · Photos</span></div><div class="g">${PH.map(s=>`<img src="${s}" alt="">`).join("")}</div></div>
+${o.figma?`<div class="ms-win ms-figma"><div class="tb"><i></i><i></i><i></i><span>Figma · Palette</span></div><div class="fc"><div class="fl2"><i></i><i></i><i></i><i></i></div><div class="fg">${SWATCH.map(c=>`<div><span style="background:${c}"></span><em>${c}</em></div>`).join("")}</div></div></div>`:""}
+<div class="ms-dock">${DOCK}</div></div><div class="ms-tint"></div></div>`}
+function applyMs(el,k,d,g){el.querySelector(".ms-tint").style.background=`rgb(${rgbOf(k,d)})`;el.style.filter=g>.001?`grayscale(${g.toFixed(3)})`:"none"}
+
+/* ---------- 1. Layers: exploded stack ---------- */
+const lsEl=$("lsScreen");lsEl.innerHTML=msHTML();
+const panes=[...document.querySelectorAll("#iso .pane")],slots=[...document.querySelectorAll("#iso .slot")],lrows=[...document.querySelectorAll(".lrow")];
+const SLOTZ=[1,2,3]; // warmth + dimming are display gamma; grayscale is applied last, on top
+const WIN=[[.08,.3],[.33,.55],[.58,.8]];
+function updLayers(p){
+  const u=$("stack3d").clientWidth/620,flat=ease(seg(p,.84,.98));
+  $("iso").style.transform=`translateY(${lerp(9,0,flat)}%) scale(${lerp(.74,1,flat)}) rotateX(${lerp(56,0,flat)}deg) rotateZ(${lerp(-34,0,flat)}deg)`;
+  const gap=74*u*(1-flat);let k=6500,d=0,g=0;
+  panes.forEach(el=>{const i=+el.dataset.pane,[a,b]=WIN[i],arr=ease(seg(p,a,a+(b-a)*.5)),eff=ease(seg(p,a+(b-a)*.3,b));
+    el.style.transform=`translateZ(${(SLOTZ[i]*gap+(1-arr)*150*u).toFixed(1)}px)`;el.style.opacity=(arr*(1-flat)).toFixed(3);
+    if(i===0)k=lerp(6500,ES.k,eff);else if(i===1)d=lerp(0,ES.d,eff);else g=eff;});
+  slots.forEach(el=>{const s=+el.dataset.slot;el.style.transform=`translateZ(${(SLOTZ[s]*gap).toFixed(1)}px)`;el.style.opacity=((1-flat)*(1-seg(p,WIN[s][0],WIN[s][0]+.12))).toFixed(3)});
+  applyMs(lsEl.querySelector(".ms"),k,d,g);
+  const m=pw(p,[[.08,START],[.33,B-150],[.58,GRAY],[.84,EM]]);
+  $("lsT").textContent=fmt(m);$("lsK").textContent=kTxt(k);$("lsS").style.background=g>.5?"#8a8a8a":`rgb(${rgbOf(k,0)})`;$("lsD").textContent=Math.round(d*100)+"%";$("lsG").textContent=g>.5?"On":"Off";
+  const idx=p<.32?0:p<.57?1:p<.84?2:3;
+  lrows.forEach((r,i)=>r.classList.toggle("on",idx===3||i===idx));$("lcap").classList.toggle("on",idx===3);$("lstage").classList.toggle("done",idx===3);
+}
+
+/* ---------- 2. Details: five scroll-scrubbed demos ---------- */
+const scenesEl=[...document.querySelectorAll(".scene")],NS=scenesEl.length,SC={};scenesEl.forEach(s=>SC[s.dataset.scene]=s);
+const drail=[...document.querySelectorAll("#drail b")];
+SC.emergency.querySelector(".vis").innerHTML=msHTML({m:DM});
+SC.pause.querySelector(".vis").innerHTML=msHTML({figma:true,m:DM});
+SC.pause.querySelector(".ms-in").insertAdjacentHTML("beforeend",'<div class="prow">Pause for <b class="pa">Safari</b><span class="sw"></span></div>');
+SC.calls.querySelector(".vis").innerHTML=`<div class="wipe">${msHTML({m:DM})}<div class="top">${msHTML({m:DM})}</div><div class="line"></div><span class="tag l">What you see</span><span class="tag r">What Zoom sends</span></div>`;
+{const ms=SC.calls.querySelectorAll(".ms");applyMs(ms[0],6500,0,0)}
+const keys2=[...SC.emergency.querySelectorAll("kbd")];
+const LSOF="lsof -i -a -p $(pgrep -x DuskMode)";
+function scEmergency(s,t){
+  keys2.forEach((k,i)=>k.classList.toggle("down",t>.04+i*.03&&t<.2));
+  const e=t<.84?ease(seg(t,.12,.18)):1-ease(seg(t,.84,.98));
+  const rem=t<.18?60:Math.max(0,Math.round(60*(1-(t-.18)/.66)));
+  s.querySelector(".ra").setAttribute("stroke-dashoffset",(188.5*(1-rem/60)).toFixed(1));s.querySelector(".rt").textContent=rem;
+  applyMs(s.querySelector(".ms"),lerp(DS.k,6500,e),lerp(DS.d,0,e),DG*(1-e));
+  s.querySelector(".e1").textContent=t<.12?"Evening":rem>0?`Full colour · ${rem} s`:t<.98?"Easing back":"Evening";
+  s.querySelector(".e2").textContent=DG&&e<.5?"Gray":kTxt(lerp(DS.k,6500,e));
+}
+function scPause(s,t){
+  const up=ease(seg(t,.1,.3)),flip=up>.5,col=ease(seg(t,.34,.52)),fg=s.querySelector(".ms-figma"),fig=up>.5,pr=s.querySelector(".prow");
+  fg.style.zIndex=fig?3:0;fg.style.transform=`translateY(${lerp(12,0,up).toFixed(1)}px) scale(${lerp(.94,1,up).toFixed(3)})`;
+  s.querySelector(".mapp").textContent=fig?"Figma":"Safari";pr.querySelector(".pa").textContent=fig?"Figma":"Safari";
+  pr.querySelector(".sw").classList.toggle("on",flip);pr.classList.toggle("hint",fig&&col<.98);
+  applyMs(s.querySelector(".ms"),lerp(DS.k,6500,col),DS.d,DG*(1-col));
+  s.querySelector(".p1").textContent=fig?"Figma":"Safari";
+  s.querySelector(".p2").textContent=col>.98?"True colour":DG&&col<.5?"Gray":kTxt(lerp(DS.k,6500,col));
+  s.querySelector(".p3").textContent=Math.round(DS.d*100)+"%"+(col>.5?" (kept)":"");
+}
+function scCalls(s,t){
+  const x=lerp(100,50,ease(seg(t,.1,.7)));const w=s.querySelector(".wipe");applyMs(w.querySelectorAll(".ms")[1],DS.k,DS.d,DG);
+  w.querySelector(".top").style.clipPath=`inset(0 ${100-x}% 0 0)`;w.querySelector(".line").style.left=x+"%";w.querySelector(".line").style.opacity=x>99.5?0:1;
+  w.querySelector(".tag.r").style.opacity=seg(t,.3,.45);w.querySelector(".tag.l").style.opacity=seg(t,.05,.2);
+}
+const SUNA=[{m:START,n:"Sunset"},{m:B-150,n:"Warm"},{m:B-120,n:"Dusk"},{m:GRAY,n:"Grayscale"},{m:B-60,n:"Red"},{m:B,n:"Bedtime"}];
+function scSun(s,t){
+  const W=600,X0=24,XW=552,z=ease(seg(t,.42,.62)),HZ=lerp(176,78,z),D0=lerp(0,START-50,z),D1=lerp(1440,B+40,z),x=m=>X0+(m-D0)/(D1-D0)*XW;
+  const rise=ST.rise,set=ST.set,ay=m=>HZ-Math.sin(Math.PI*clamp((m-rise)/(set-rise)))*130;
+  let d="";for(let m=rise;m<=set+.1;m+=(set-rise)/80)d+=(d?"L":"M")+x(m).toFixed(1)+" "+ay(m).toFixed(1);
+  const sm=lerp(rise,set,ease(seg(t,.02,.42))),sx=x(sm),sy=ay(sm);
+  const step=z>.5?60:180;let ticks="";for(let h=0;h<=1440;h+=step){const xx=x(h);if(xx<X0-1||xx>X0+XW+1)continue;const hh=Math.floor(h/60)%24;ticks+=`<line x1="${xx}" x2="${xx}" y1="${HZ}" y2="${HZ+5}" stroke="var(--muted)"/><text x="${xx}" y="${HZ+19}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="Geist Mono,monospace">${(hh%12||12)+(hh<12?" AM":" PM")}</text>`}
+  const bandP=seg(t,.6,.97),bx=x(START),bw=Math.max(0,x(lerp(START,B,bandP))-bx);
+  const stops=SUNA.map(a=>{const q=at(a.m+.01);return`<stop offset="${((a.m-START)/(B-START)).toFixed(3)}" stop-color="rgb(${rgbOf(q.k,q.d)})"/>`}).join("");
+  const labels=SUNA.map((a,i)=>{const o=seg(t,.62+i*.055,.68+i*.055);if(o<=0)return"";const ax=x(a.m),row=i%2,y=HZ+72+row*44,q=at(a.m+.01),an=i===0?"start":i===SUNA.length-1?"end":"middle";
+    return`<g opacity="${o.toFixed(2)}"><line x1="${ax}" x2="${ax}" y1="${HZ+38}" y2="${y-15}" stroke="var(--line-strong)"/><circle cx="${ax}" cy="${HZ+30}" r="5.5" fill="rgb(${rgbOf(q.k,q.d)})" stroke="var(--line-strong)"/><text x="${ax}" y="${y}" text-anchor="${an}" font-size="14.5" font-weight="600" fill="var(--head)" font-family="Geist,sans-serif">${a.n}</text><text x="${ax}" y="${y+17}" text-anchor="${an}" font-size="12.5" fill="var(--muted)" font-family="Geist Mono,monospace">${fmt(a.m)}</text></g>`}).join("");
+  s.querySelector("svg").innerHTML=`<defs><clipPath id="sunclip"><rect x="${X0}" y="0" width="${XW}" height="${HZ}"/></clipPath><linearGradient id="eveg" gradientUnits="userSpaceOnUse" x1="${x(START)}" x2="${x(B)}">${stops}</linearGradient></defs>
+  <g clip-path="url(#sunclip)"><path d="${d}" fill="none" stroke="var(--ember-fill)" stroke-width="2" stroke-dasharray="1 6" stroke-linecap="round"/><circle cx="${sx}" cy="${sy}" r="9" fill="var(--ember-fill)"/><circle cx="${sx}" cy="${sy}" r="18" fill="var(--ember-fill)" opacity=".18"/></g>
+  <line x1="${X0}" x2="${X0+XW}" y1="${HZ}" y2="${HZ}" stroke="var(--line-strong)"/>${ticks}
+  <rect x="${bx}" y="${HZ+22}" width="${bw}" height="16" rx="8" fill="url(#eveg)" stroke="var(--line)"/>${labels}`;
+}
+function scPrivate(s,t){
+  const n=Math.round(seg(t,.05,.5)*LSOF.length);s.querySelector(".cmd").textContent=LSOF.slice(0,n);
+  s.querySelector(".out").innerHTML=t>.58?'\n<span class="p">~ %</span> ':"";
+  s.querySelector(".z0").style.opacity=(.15+.85*seg(t,.6,.72)).toFixed(2);
+}
+const SCN={emergency:scEmergency,pause:scPause,calls:scCalls,sun:scSun,private:scPrivate};
+document.querySelectorAll("[data-dg]").forEach(b=>b.addEventListener("click",()=>{DG=+b.dataset.dg;document.querySelectorAll("[data-dg]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));updAll()}));
+function updDetails(){
+  if(innerWidth<=900||reduce){scenesEl.forEach(s=>SCN[s.dataset.scene](s,reduce?1:passP(s,.95,.1)));return}
+  const f=sm("D",pinP($("details")),.085)*NS,i=Math.min(NS-1,Math.floor(f)),l=f-i,demo=i===NS-1?clamp(l/.85):clamp(l/.55),slide=i<NS-1?ease(seg(l,.55,1)):0,pos=i+slide;
+  $("track").style.transform=`translate3d(${(-pos*(scenesEl[0].offsetWidth+20)).toFixed(1)}px,0,0)`;
+  scenesEl.forEach((s,j)=>{const dd=Math.min(1,Math.abs(pos-j));s.style.transform=`scale(${(1-.06*dd).toFixed(4)})`;s.style.opacity=(1-.55*dd).toFixed(3)});
+  scenesEl.forEach((s,j)=>SCN[s.dataset.scene](s,j<i?1:j>i?0:demo));
+  drail.forEach((b,j)=>b.style.transform=`scaleX(${j<i?1:j>i?0:demo})`);
+}
+
+/* ---------- 3. Science: the chart walks the evening ---------- */
+const AM=[START,B-150,B-120,GRAY,B-45],studyEls=[...document.querySelectorAll("#studies .study")],srail=[...document.querySelectorAll("#srail b")];
+const WHEN=[`From ${fmt(START)} · Sunset`,`${fmt(B-150)} · Warm`,`${fmt(B-120)} · Dusk`,`${fmt(GRAY)} · Grayscale`,"Near bedtime · The other side"];
+document.querySelectorAll("#studies .when").forEach(w=>w.textContent=WHEN[+w.dataset.w]);
+let specM=START;
+function drawSpec(){const m=specM,s=at(m),c0=mult(s.k),L=.2126*c0[0]+.7152*c0[1]+.0722*c0[2],c=m>=GRAY?[L,L,L]:c0,f=1-s.d*.92,idx=AM.reduce((a,v,i)=>m>=v?i:a,0);
+  const W=560,H=230,px=x=>34+(x-400)/300*(W-50),py=y=>H-34-y*(H-64);let pe="",pm="",tot=0;
+  for(let x=400;x<=700;x+=3){const e=emit(x,...c)*f;pe+=(x===400?"M":"L")+px(x).toFixed(1)+" "+py(e).toFixed(1);pm+=(x===400?"M":"L")+px(x).toFixed(1)+" "+py(mel(x)).toFixed(1)}
+  for(let x=400;x<=700;x+=2)tot+=emit(x,...c)*f*mel(x);
+  $("specPct").textContent=Math.round(tot/FULL*100)+"%";
+  const band=idx===1?[535,575,"green, early evening"]:[452,492,m>=GRAY?"gray: blue is back, dimming holds it down":"melatonin peak"];
+  const ticks=[400,464,555,620,700].map(x=>`<line x1="${px(x)}" x2="${px(x)}" y1="${H-34}" y2="${H-29}" stroke="var(--muted)"/><text x="${px(x)}" y="${H-12}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="Geist Mono,monospace">${x}</text>`).join("");
+  $("specSvg").innerHTML=`<rect x="${px(band[0])}" y="18" width="${px(band[1])-px(band[0])}" height="${H-52}" fill="var(--ember-fill)" opacity="${idx<2?.14:.06}"/>
+  <text x="${px((band[0]+band[1])/2)}" y="12" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="Geist Mono,monospace">${band[2]}</text>
+  <line x1="34" x2="${W-16}" y1="${H-34}" y2="${H-34}" stroke="var(--line-strong)"/>
+  <path d="${pe}L${px(700)} ${py(0)}L${px(400)} ${py(0)}Z" fill="var(--ember-fill)" opacity=".2"/>
+  <path d="${pe}" fill="none" stroke="var(--ember)" stroke-width="2.2"/>
+  <path d="${pm}" fill="none" stroke="var(--head)" stroke-width="1.5" stroke-dasharray="4 5" opacity=".6"/>${ticks}
+  <text x="${W-16}" y="${H-12}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="Geist Mono,monospace">nm</text>`;
+  $("spT").textContent=fmt(m);$("spK").textContent=kTxt(s.k);$("spD").textContent=Math.round(s.d*100)+"%";$("spG").textContent=m>=GRAY?"On":"Off";
+  studyEls.forEach((e,i)=>e.classList.toggle("on",reduce||i===idx));
+  const BD=[START,B-150,B-120,GRAY,B-45,B];srail.forEach((b,i)=>b.style.transform=`scaleX(${seg(m,BD[i],BD[i+1])})`);
+}
+function updScience(){
+  if(reduce){specM=B-45}
+  else if(innerWidth<=980){let best=0,bd=1e9;studyEls.forEach((e,i)=>{const b=e.getBoundingClientRect(),dd=Math.abs(b.top+b.height/2-innerHeight*.72);if(dd<bd){bd=dd;best=i}});specM=AM[best]+12}
+  else specM=lerp(START,B,seg(pinP($("science")),.04,.96));
+  drawSpec();
+}
+/* ---------- 4. Install: types once, icon lands in the menu bar ---------- */
+{const d=new Date();$("mbClock").textContent=d.toLocaleDateString("en-US",{weekday:"short"})+" "+fmt(nowMin());}
+const TCMD=$("tcmd").textContent,tlines=[...document.querySelectorAll("#termPre [data-l]")];
+if(!reduce){$("tcmd").textContent="";tlines.forEach(l=>l.hidden=true);
+  const io=new IntersectionObserver(es=>{if(!es.some(e=>e.isIntersecting))return;io.disconnect();const t0=performance.now(),TT=TCMD.length*12;
+    const ty=setInterval(()=>{const el=performance.now()-t0;$("tcmd").textContent=TCMD.slice(0,Math.ceil(el/12));
+      tlines.forEach((l,i)=>{if(el>TT+420*(i+1))l.hidden=false});if(el>TT+420*3+300)$("dmi").classList.add("on");
+      if(el>TT+420*(tlines.length+1))clearInterval(ty)},16)},{threshold:.6});
+  io.observe($("term"));
+}else $("dmi").classList.add("on");
+
+/* ---------- Compared: a pinned spotlight, one row at a time ---------- */
+const spots=[...document.querySelectorAll("#compare .spot")],kRows=[...document.querySelectorAll("#cmp tbody tr")],krail=[...document.querySelectorAll("#krail b")],NK=spots.length;
+$("kMs2").innerHTML=msHTML();$("kMs3").innerHTML=msHTML();
+{const col=mult(3400).map(v=>Math.round(v*255)).join(",");document.querySelectorAll("#compare .kbar .fl").forEach(f=>f.style.background=`linear-gradient(90deg,#ffffff,rgb(${col}))`)}
+function kBedtime(s,t){
+  const FS=innerWidth<600?1.6:1,Bv=lerp(22*60,24*60+30,ease(seg(t,.05,.9))),W=560,X0=20,XW=520,D0=START-30,D1=25*60+30,x=m=>X0+(m-D0)/(D1-D0)*XW;
+  let ticks="";for(let h=Math.ceil(D0/60)*60;h<=D1;h+=60){const hh=Math.floor(h/60)%24;ticks+=`<text x="${x(h)}" y="208" text-anchor="middle" font-size="${11*FS}" fill="var(--muted)" font-family="Geist Mono,monospace">${FS>1&&hh%2?"":(hh%12||12)+(hh<12?" AM":" PM")}</text><line x1="${x(h)}" x2="${x(h)}" y1="188" y2="194" stroke="var(--line-strong)"/>`}
+  const AN=[[150,"Warm"],[120,"Dusk"],[90,"Gray"],[60,"Red"],[0,"Bed"]];
+  const dots=AN.map(([o,n],i)=>{const ax=x(Bv-o),q=at(B-o+.01),col=o<=90?"#8a8a8a":`rgb(${rgbOf(q.k,0)})`;return`<circle cx="${ax}" cy="132" r="6" fill="${col}" stroke="var(--line-strong)"/><text x="${ax}" y="${i%2?164:112}" text-anchor="middle" font-size="${11.5*FS}" fill="var(--head)" font-family="Geist,sans-serif" font-weight="600">${n}</text>`}).join("");
+  s.querySelector("svg").innerHTML=`
+  <text x="${X0}" y="26" font-size="${12.5*FS}" fill="var(--muted)" font-family="Geist,sans-serif">Night Shift · sunset to sunrise, whatever your bedtime</text>
+  <rect x="${x(START)}" y="38" width="${X0+XW-x(START)}" height="12" rx="6" fill="var(--ember-fill)" opacity=".55"/>
+  <text x="${X0}" y="84" font-size="${12.5*FS}" fill="var(--head)" font-family="Geist,sans-serif" font-weight="600">DuskMode · counts back from your bedtime</text>
+  <line x1="${x(Bv-150)}" x2="${x(Bv)}" y1="132" y2="132" stroke="var(--line-strong)" stroke-width="2"/>${dots}
+  <line x1="${x(Bv)}" x2="${x(Bv)}" y1="94" y2="186" stroke="var(--head)" stroke-dasharray="3 4"/>
+  <line x1="${X0}" x2="${X0+XW}" y1="188" y2="188" stroke="var(--line-strong)"/>${ticks}`;
+  s.querySelector(".kb").textContent=fmt(Bv);
+}
+function kDim(s,t){
+  const a=ease(seg(t,.05,.42)),b=ease(seg(t,.5,.92)),FL=.34,lv=t<.5?lerp(1,FL,a):lerp(FL,FL*.2,b);
+  s.querySelector(".mfill").style.transform=`scaleY(${lv.toFixed(4)})`;
+  const v=Math.round(255*lv);s.querySelector(".ms-tint").style.background=`rgb(${v},${v},${v})`;
+  s.querySelector(".mlab2").style.opacity=seg(t,.5,.62);
+  s.querySelector(".kd").textContent=t<.5?"Brightness keys":"DuskMode, "+Math.round(b*80)+"% further";
+}
+function kGray(s,t){
+  const m=lerp(B-120,B-70,seg(t,.05,.9)),q=at(m),g=clamp((m-(GRAY-1))/2);
+  applyMs(s.querySelector(".ms"),q.k,q.d,g);
+  s.querySelector(".kg").textContent=fmt(m)+(g>.5?" · Grayscale on, by itself":" · Grayscale at "+fmt(GRAY));
+}
+function kCode(s,t){const ls=s.querySelectorAll(".kcode .ln"),n=Math.round(seg(t,.05,.8)*ls.length);ls.forEach((l,i)=>l.classList.toggle("off",i>=n))}
+function kWarm(s,t){s.querySelectorAll(".kbar .fl").forEach((f,i)=>f.style.transform=`scaleX(${ease(seg(t,.05+i*.08,.6+i*.08)).toFixed(4)})`)}
+const KF=[kWarm,kBedtime,kDim,kGray,kCode,()=>{}];
+function updCompare(){
+  if(innerWidth<=980||reduce){spots.forEach((s,i)=>KF[i](s,reduce?1:passP(s,.9,.2)));kRows.forEach(r=>r.classList.add("act"));$("cmp").classList.add("all");return}
+  const f=sm("K",pinP($("compare")),.085)*NK,i=Math.min(NK-1,Math.floor(f)),l=f-i,demo=i===NK-1?clamp(l/.85):clamp(l/.66),x=i<NK-1?ease(seg(l,.66,1)):0,pos=i+x;
+  spots.forEach((s,j)=>{const dd=j-pos,o=clamp(1-Math.abs(dd)*1.6);s.style.opacity=o.toFixed(3);s.style.transform=`translateY(${(dd*40).toFixed(1)}px)`;s.style.pointerEvents=o>.5?"auto":"none";s.setAttribute("aria-hidden",o>.5?"false":"true");KF[j](s,j<i?1:j>i?0:demo)});
+  const act=Math.round(pos),all=act>=NK-1;kRows.forEach((r,j)=>r.classList.toggle("act",all||j===act));$("cmp").classList.toggle("all",all);
+  krail.forEach((b,j)=>b.style.transform=`scaleX(${j<i?1:j>i?0:demo})`);
+}
+
+/* ---------- 5. Close: the night grows to fill the screen ---------- */
+function updClose(){const p=reduce?1:pinP($("closing")),vw=document.documentElement.clientWidth,vh=innerHeight,g=ease(seg(p,.02,.5));
+  const pad=Math.min(40,Math.max(16,vw*.04)),s0=Math.max(pad,(vw-1180)/2+pad),t0=Math.max(0,(vh-Math.min(460,vh*.62))/2);
+  const s=s0*(1-g),t=t0*(1-g),r=28*(1-g),card=$("closeCard");
+  card.style.clipPath=`inset(${t.toFixed(1)}px ${s.toFixed(1)}px ${t.toFixed(1)}px ${s.toFixed(1)}px round ${r.toFixed(1)}px)`;card.style.setProperty("--s",s+"px");card.style.setProperty("--t",t+"px");
+  const n=seg(p,.05,.85);skyNight&&skyNight({el:lerp(-1.2,-7,n)*deg,exp:lerp(5,16,n),pitch:.3,fov:.9,stars:seg(p,.25,.75),az:-.4});
+  const m=lerp(B-8,B,seg(p,.15,.6));$("clk").textContent=fmt(m)+" · "+(m>=B-.01?"Bedtime · 1900 K · 80% dim":"Red");
+  card.classList.toggle("lit",p>.55);
+}
+function updAll(){updLayers(sm("L",reduce?1:pinP($("layers")),.14));updDetails();updScience();updCompare();updClose();smKick()}
+
+/* ---------------- boot ---------------- */
+const t0="system";
+fitMac();setTheme(t0);onScroll();
+})();
+</script>
+</body>
+</html>
