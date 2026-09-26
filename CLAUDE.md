@@ -106,6 +106,14 @@ executable. Run it after touching anything in DuskModeCore. Env: macOS 15.7.3, A
 - Release packaging: `./build.sh release`, then `ditto -c -k --keepParent DuskMode.app
   DuskMode.zip`, and `hdiutil create` a UDZO dmg (app + /Applications symlink). Upload both
   with `gh release create`.
+- **Two GitHub copies, always in sync:** `neerajsingh869/DuskMode` is canonical (releases,
+  the install.sh URL, the canonical link and og:url on both sites). `neerajtechwhiz/DuskMode`
+  is a full mirror with its own Pages site (neerajtechwhiz.github.io/DuskMode); at runtime
+  its GitHub links point to its own repo, while install and downloads stay canonical.
+  **Always push with `scripts/publish.sh`**, never a bare `git push`. This repo's git auth
+  goes through `gh auth git-credential` (repo-local config), so the script switches gh
+  accounts per push. Commits are authored as
+  `Neeraj Singh <45857975+neerajsingh869@users.noreply.github.com>` (repo-local config).
 - Website: `site/index.html` (approved design, Round 5 of the landing-page design rounds;
   every section after the hero is a scroll sequence driven by the real timeline maths;
   grayscale is always rendered last, as neutral gray). Edit `site/` directly. Pushes to

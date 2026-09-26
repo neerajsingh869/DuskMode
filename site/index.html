@@ -15,6 +15,7 @@
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("dm-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
@@ -285,6 +286,11 @@ table.cmp{width:100%;border-collapse:collapse;min-width:640px;font-size:15px}
 .foot{display:flex;gap:10px 26px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted);padding-block:34px 60px}
 .foot a{color:var(--muted);text-decoration:none}.foot a:hover{color:var(--head)}
 .foot .me{margin-right:auto;color:var(--body)}
+.thm{order:9;flex-basis:100%;display:flex;justify-content:flex-end;align-items:center;gap:2px}
+.thm button{display:inline-flex;align-items:center;gap:6px;font:500 12.5px/1 var(--f);color:var(--muted);background:transparent;border:0;border-radius:999px;padding:8px 12px;min-height:34px;cursor:pointer;transition:background-color .2s ease,color .2s ease}
+.thm button:hover{color:var(--head)}
+.thm button[aria-pressed="true"]{background:var(--surface);color:var(--head);box-shadow:inset 0 0 0 1px var(--line-strong)}
+@media (max-width:600px){.thm{justify-content:flex-start}}
 
 
 /* ============ ROUND 3: shared scroll-sequence grammar ============ */
@@ -887,7 +893,7 @@ html,body{overflow-x:clip}
     </div>
   </div>
 </section>
-<div class="wrap"><div class="foot"><span class="me">DuskMode 1.0 · MIT licence</span><a href="https://github.com/neerajsingh869/DuskMode">GitHub</a><a href="https://github.com/neerajsingh869/DuskMode/issues">Report a problem</a><a href="#science">Research</a></div></div>
+<div class="wrap"><div class="foot"><span class="me">DuskMode 1.0 · MIT licence</span><div class="thm" role="group" aria-label="Colour theme"><button type="button" data-th="system" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4Z" fill="currentColor"/></svg>System</button><button type="button" data-th="light" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg>Light</button><button type="button" data-th="dark" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 10.2A6 6 0 0 1 5.8 2.4a6 6 0 1 0 7.8 7.8Z" fill="currentColor"/></svg>Dark</button></div><a href="https://github.com/neerajsingh869/DuskMode">GitHub</a><a href="https://github.com/neerajsingh869/DuskMode/issues">Report a problem</a><a href="#science">Research</a></div></div>
 </main>
 
 
@@ -946,7 +952,7 @@ function setPop(el,m){el.querySelector("[data-status]").textContent=statusFor(m)
 /* ---------------- theme ---------------- */
 const isDark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches};
 function applyMacAppearance(){const d=isDark();$("imgTimeline").src=IMG[d?"timeline-dark":"timeline-light"];$("imgScience").src=IMG[d?"science-dark":"science-light"];$("macPop").classList.toggle("dark",d);$("mac").classList.toggle("dark-base",d);}
-function setTheme(t){const r=document.documentElement;t==="system"?r.removeAttribute("data-theme"):r.setAttribute("data-theme",t);
+function setTheme(t){const r=document.documentElement;try{t==="system"?localStorage.removeItem("dm-theme"):localStorage.setItem("dm-theme",t)}catch(e){}t==="system"?r.removeAttribute("data-theme"):r.setAttribute("data-theme",t);
   document.querySelectorAll("[data-th]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.th===t)));
   applyMacAppearance();redrawSkies();updAll();}
 document.querySelectorAll("[data-th]").forEach(b=>b.addEventListener("click",()=>setTheme(b.dataset.th)));
@@ -1265,7 +1271,9 @@ function updClose(){const p=reduce?1:pinP($("closing")),vw=document.documentElem
 function updAll(){updLayers(sm("L",reduce?1:pinP($("layers")),.14));updDetails();updScience();updCompare();updClose();smKick()}
 
 /* ---------------- boot ---------------- */
-const t0="system";
+(function(){const own=location.hostname.split(".")[0];if(!own||own==="neerajsingh869"||!location.hostname.endsWith("github.io"))return;
+  document.querySelectorAll('a[href^="https://github.com/neerajsingh869/DuskMode"]').forEach(a=>{const h=a.getAttribute("href");if(/\/(releases|blob\/main\/install\.sh)/.test(h))return;a.setAttribute("href",h.replace("github.com/neerajsingh869/","github.com/"+own+"/"))})})();
+let t0="system";try{const v=localStorage.getItem("dm-theme");if(v==="light"||v==="dark")t0=v}catch(e){}
 fitMac();setTheme(t0);onScroll();
 })();
 </script>
