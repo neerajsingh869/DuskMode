@@ -33,7 +33,7 @@ DuskMode runs one continuous evening timeline, counted back from your bedtime an
 | Layer | When | What it does | Evidence |
 |---|---|---|---|
 | **Warmth** | From sunset | 6500 K down to 1900 K. Cuts blue near 464 nm, where melatonin suppression peaks, and trims green near 555 nm. | Strong |
-| **Dimming** | From 2.5 h before bed | Up to 80% darker than your lowest brightness key. Light level moves melatonin more than light colour does. | Strong |
+| **Dimming** | From sunset, deepest at bedtime | Up to 80% darker than your lowest brightness key. Light level moves melatonin more than light colour does. | Strong |
 | **Grayscale** | From 1.5 h before bed | Drains colour from feeds and thumbnails so one more video is easier to skip. | Emerging |
 
 Tonight's anchors (with an 11:00 PM bedtime): Warm 8:30 PM · Dusk 9:00 PM · Grayscale 9:30 PM · Red 10:00 PM · Bedtime 11:00 PM. Values slide continuously between anchors, so there are no visible steps.
