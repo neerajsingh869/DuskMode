@@ -8,3 +8,7 @@ DuskMode.app/
 
 # macOS
 .DS_Store
+
+# Local-only working material (never pushed; see CLAUDE.md)
+PRIVATE.md
+design/

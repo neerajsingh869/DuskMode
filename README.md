@@ -84,7 +84,7 @@ swift run DuskModeSelfTest      # 50 checks on the timeline, solar and colour ma
 ./build.sh release run          # builds DuskMode.app and launches it
 ```
 
-The website lives in [`site/`](site/). It's plain HTML, CSS and JavaScript, deployed to GitHub Pages by [`.github/workflows/pages.yml`](.github/workflows/pages.yml). Its design history, from the rejected Round 1 to the approved Round 5, is in [`design/landing/`](design/landing/).
+The website lives in [`site/`](site/). It's plain HTML, CSS and JavaScript, deployed to GitHub Pages by [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
 
 ## Licence
 
