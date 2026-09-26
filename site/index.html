@@ -286,10 +286,6 @@ table.cmp{width:100%;border-collapse:collapse;min-width:640px;font-size:15px}
 .foot{display:flex;gap:10px 26px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted);padding-block:34px 60px}
 .foot a{color:var(--muted);text-decoration:none}.foot a:hover{color:var(--head)}
 .foot .me{margin-right:auto;color:var(--body)}
-.thm{order:9;flex-basis:100%;display:flex;justify-content:flex-end;align-items:center;gap:2px}
-.thm button{display:inline-flex;align-items:center;gap:6px;font:500 12.5px/1 var(--f);color:var(--muted);background:transparent;border:0;border-radius:999px;padding:8px 12px;min-height:34px;cursor:pointer;transition:background-color .2s ease,color .2s ease}
-.thm button:hover{color:var(--head)}
-.thm button[aria-pressed="true"]{background:var(--surface);color:var(--head);box-shadow:inset 0 0 0 1px var(--line-strong)}
 @media (max-width:600px){.thm{justify-content:flex-start}}
 
 
@@ -443,7 +439,7 @@ table.cmp{width:100%;border-collapse:collapse;min-width:640px;font-size:15px}
 /* ============ CLOSE: night grows to full screen ============ */
 #closing{height:230vh}
 .cstage .close{position:absolute;inset:0;border-radius:0;min-height:0;will-change:clip-path}
-.close .in{position:absolute;left:calc(var(--s,0px) + clamp(28px,5vw,60px));right:calc(var(--s,0px) + clamp(28px,5vw,60px));bottom:calc(var(--t,0px) + clamp(28px,5vw,60px));padding:0}
+.close .in{position:absolute;left:var(--cx,clamp(28px,5vw,60px));right:var(--cx,clamp(28px,5vw,60px));width:auto;bottom:calc(var(--t,0px) + clamp(28px,5vw,60px));padding:0}
 .close .clock{font:500 13px/1 var(--mono);color:rgba(255,255,255,.72);letter-spacing:.04em;display:inline-flex;gap:10px;align-items:center}
 .close .clock i{width:8px;height:8px;border-radius:50%;background:#ff8a2a;box-shadow:0 0 10px #ff8a2a;display:block}
 .close h2,.close p,.close .ctas2{transition:opacity .6s ease,transform .6s ease}
@@ -562,6 +558,28 @@ html,body{overflow-x:clip}
 @media (max-width:980px){.sstage .spec-wrap{display:contents}.sstage .spec{position:sticky;top:8px;z-index:3}.sstage .spec-wrap .eyebrow,.sstage h2{grid-column:1}}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}html{scroll-behavior:auto}}
+
+/* theme control in the nav: glass, same family as the GitHub button */
+.tsw{position:relative;display:inline-flex;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.tsw button{position:relative;z-index:1;width:32px;height:32px;display:grid;place-items:center;border:0;padding:0;background:transparent;border-radius:999px;color:rgba(255,255,255,.6);cursor:pointer;transition:color .25s ease}
+.tsw button:hover,.tsw button[aria-checked="true"]{color:#fff}
+.tsw-i{position:absolute;top:3px;left:3px;width:32px;height:32px;border-radius:999px;background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.4),0 2px 8px rgba(0,0,0,.18);transition:transform .45s cubic-bezier(.3,1.3,.4,1)}
+.tsw button::after{content:attr(aria-label);position:absolute;top:calc(100% + 10px);left:50%;transform:translate(-50%,-4px);opacity:0;pointer-events:none;font:500 12px/1 var(--f);color:#fff;background:rgba(18,18,20,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:7px 9px;border-radius:8px;white-space:nowrap;transition:opacity .18s ease,transform .18s ease}
+.tsw button:hover::after,.tsw button:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+.tsw button:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.tmenu{position:relative}
+.tm-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:border-color .2s ease,background-color .2s ease}
+.tm-btn:hover,.tm-btn[aria-expanded="true"]{border-color:#fff;background:rgba(255,255,255,.12)}
+.tm-cur{display:grid;place-items:center;transition:transform .35s cubic-bezier(.3,1.3,.4,1)}
+.tm-list{position:absolute;right:0;top:calc(100% + 10px);min-width:176px;padding:6px;border-radius:14px;background:rgba(22,22,24,.82);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);box-shadow:0 0 0 .5px rgba(255,255,255,.16),0 24px 50px -12px rgba(0,0,0,.6);display:grid;gap:2px;transform-origin:top right;animation:tmIn .2s cubic-bezier(.2,.9,.3,1)}
+.tm-list[hidden]{display:none}
+@keyframes tmIn{from{opacity:0;transform:scale(.96) translateY(-4px)}}
+.tm-list button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:9px;background:transparent;color:rgba(255,255,255,.82);font:500 14px/1 var(--f);cursor:pointer;text-align:left}
+.tm-list button span{flex:1}
+.tm-list button:hover,.tm-list button:focus-visible{background:rgba(255,255,255,.1);color:#fff;outline:none}
+.tm-list .ck{opacity:0}.tm-list button[aria-checked="true"] .ck{opacity:1}
+@media (max-width:760px){.topnav nav{gap:12px}}
+@media (max-width:480px){.topnav .gh{font-size:0;gap:0;padding:11px}}
 </style>
 </head>
 <body>
@@ -580,7 +598,8 @@ html,body{overflow-x:clip}
         <a class="hs" href="#evening">How it works</a>
         <a class="hs" href="#science">Science</a>
         <a class="hs" href="#install">Install</a>
-        <a class="gh" href="https://github.com/neerajsingh869/DuskMode"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Star on GitHub</a>
+        <div class="tsw" role="radiogroup" aria-label="Colour theme"><span class="tsw-i" aria-hidden="true"></span><button type="button" role="radio" data-th="system" aria-checked="true" aria-label="System"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4Z" fill="currentColor"/></svg></button><button type="button" role="radio" data-th="light" aria-checked="false" aria-label="Light"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg></button><button type="button" role="radio" data-th="dark" aria-checked="false" aria-label="Dark"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 10.2A6 6 0 0 1 5.8 2.4a6 6 0 1 0 7.8 7.8Z" fill="currentColor"/></svg></button></div>
+        <a class="gh" href="https://github.com/neerajsingh869/DuskMode" aria-label="Star DuskMode on GitHub"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Star on GitHub</a>
       </nav>
     </div>
   </div>
@@ -893,7 +912,7 @@ html,body{overflow-x:clip}
     </div>
   </div>
 </section>
-<div class="wrap"><div class="foot"><span class="me">DuskMode 1.0 · MIT licence</span><div class="thm" role="group" aria-label="Colour theme"><button type="button" data-th="system" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4Z" fill="currentColor"/></svg>System</button><button type="button" data-th="light" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg>Light</button><button type="button" data-th="dark" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 10.2A6 6 0 0 1 5.8 2.4a6 6 0 1 0 7.8 7.8Z" fill="currentColor"/></svg>Dark</button></div><a href="https://github.com/neerajsingh869/DuskMode">GitHub</a><a href="https://github.com/neerajsingh869/DuskMode/issues">Report a problem</a><a href="#science">Research</a></div></div>
+<div class="wrap"><div class="foot"><span class="me">DuskMode 1.0 · MIT licence</span><a href="https://github.com/neerajsingh869/DuskMode">GitHub</a><a href="https://github.com/neerajsingh869/DuskMode/issues">Report a problem</a><a href="#science">Research</a></div></div>
 </main>
 
 
@@ -951,10 +970,35 @@ function setPop(el,m){el.querySelector("[data-status]").textContent=statusFor(m)
 
 /* ---------------- theme ---------------- */
 const isDark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches};
+/* ---------------- theme control (nav) ---------------- */
+function syncThemeUI(t){
+  document.querySelectorAll("[data-th]").forEach(b=>b.setAttribute("aria-checked",String(b.dataset.th===t)));
+  const seg=document.querySelector(".tsw");if(seg){const i=["system","light","dark"].indexOf(t);seg.querySelector(".tsw-i").style.transform=`translateX(${i*34}px)`}
+  const mb=document.querySelector(".tm-btn");if(mb){const src=document.querySelector(`.tm-list [data-th="${t}"] svg`);mb.querySelector(".tm-cur").innerHTML=src.outerHTML;mb.setAttribute("aria-label","Colour theme: "+t[0].toUpperCase()+t.slice(1))}
+}
+(function(){const btn=document.querySelector(".tm-btn");if(!btn)return;const list=document.querySelector(".tm-list"),items=[...list.querySelectorAll("button")];
+  const open=o=>{list.hidden=!o;btn.setAttribute("aria-expanded",String(o));if(o)(list.querySelector('[aria-checked="true"]')||items[0]).focus()};
+  btn.addEventListener("click",()=>open(list.hidden));
+  items.forEach(b=>b.addEventListener("click",()=>{open(false);btn.focus()}));
+  list.addEventListener("keydown",e=>{const i=items.indexOf(document.activeElement);
+    if(e.key==="ArrowDown"){e.preventDefault();items[(i+1)%items.length].focus()}
+    else if(e.key==="ArrowUp"){e.preventDefault();items[(i+items.length-1)%items.length].focus()}
+    else if(e.key==="Escape"){open(false);btn.focus()}});
+  document.addEventListener("click",e=>{if(!list.hidden&&!e.target.closest(".tmenu"))open(false)});
+})();
+(function(){const g=document.querySelector(".tsw");if(!g)return;const bs=[...g.querySelectorAll("button")];
+  g.addEventListener("keydown",e=>{const i=bs.indexOf(document.activeElement);if(i<0)return;
+    const n=e.key==="ArrowRight"?(i+1)%3:e.key==="ArrowLeft"?(i+2)%3:-1;if(n<0)return;e.preventDefault();bs[n].focus();bs[n].click()})})();
+/* hero sky eases between the light (sunset) and dark (night) looks */
+let DK=isDark()?1:0,dkRaf=0;
+function animateSky(){const to=isDark()?1:0,from=DK,t0=performance.now();cancelAnimationFrame(dkRaf);
+  if(reduce||from===to){DK=to;redrawSkies();return}
+  const k=e=>e<.5?4*e*e*e:1-Math.pow(-2*e+2,3)/2;
+  const step=now=>{const f=Math.min(1,(now-t0)/1200);DK=from+(to-from)*k(f);redrawSkies();if(f<1)dkRaf=requestAnimationFrame(step)};dkRaf=requestAnimationFrame(step)}
 function applyMacAppearance(){const d=isDark();$("imgTimeline").src=IMG[d?"timeline-dark":"timeline-light"];$("imgScience").src=IMG[d?"science-dark":"science-light"];$("macPop").classList.toggle("dark",d);$("mac").classList.toggle("dark-base",d);}
 function setTheme(t){const r=document.documentElement;try{t==="system"?localStorage.removeItem("dm-theme"):localStorage.setItem("dm-theme",t)}catch(e){}t==="system"?r.removeAttribute("data-theme"):r.setAttribute("data-theme",t);
-  document.querySelectorAll("[data-th]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.th===t)));
-  applyMacAppearance();redrawSkies();updAll();}
+  syncThemeUI(t);
+  applyMacAppearance();animateSky();updAll();}
 document.querySelectorAll("[data-th]").forEach(b=>b.addEventListener("click",()=>setTheme(b.dataset.th)));
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>setTheme(document.documentElement.dataset.theme||"system"));
 
@@ -1000,8 +1044,8 @@ function makeSky(canvas,scale){
 }
 const deg=Math.PI/180;
 const skyHero=makeSky($("sky"),.5), skyWall=makeSky($("wall"),.6), skyNight=makeSky($("night"),.5);
-function heroParams(p){const d=isDark();const L=(a,b)=>a+(b-a)*p;
-  return d?{el:L(-.3,-3)*deg,exp:L(3.5,10),pitch:.28,fov:.9,az:.3,stars:Math.min(1,p*1.6)}:{el:L(2.5,-.3)*deg,exp:L(1.8,3.5),pitch:.28,fov:.9,az:.3,stars:0}}
+function heroParams(p){const L=(a,b)=>a+(b-a)*p,M=(a,b)=>a+(b-a)*DK;
+  return{el:M(L(2.5,-.3),L(-.3,-3))*deg,exp:M(L(1.8,3.5),L(3.5,10)),pitch:.28,fov:.9,az:.3,stars:M(0,Math.min(1,p*1.6))}}
 let heroP=0;
 function redrawSkies(){skyHero&&skyHero(heroParams(heroP));skyWall&&skyWall({el:5*deg,exp:1.5,pitch:.3,fov:.9,az:.25})}
 if(!skyHero)$("sky").style.background="linear-gradient(180deg,#27406e 0%,#7b6d8f 45%,#e0895a 68%,#1b1a22 70%)";
@@ -1264,6 +1308,7 @@ function updClose(){const p=reduce?1:pinP($("closing")),vw=document.documentElem
   const pad=Math.min(40,Math.max(16,vw*.04)),s0=Math.max(pad,(vw-1180)/2+pad),t0=Math.max(0,(vh-Math.min(460,vh*.62))/2);
   const s=s0*(1-g),t=t0*(1-g),r=28*(1-g),card=$("closeCard");
   card.style.clipPath=`inset(${t.toFixed(1)}px ${s.toFixed(1)}px ${t.toFixed(1)}px ${s.toFixed(1)}px round ${r.toFixed(1)}px)`;card.style.setProperty("--s",s+"px");card.style.setProperty("--t",t+"px");
+  const ip=Math.min(60,Math.max(28,vw*.05));card.style.setProperty("--cx",(s0+ip*(1-g)).toFixed(1)+"px");
   const n=seg(p,.05,.85);skyNight&&skyNight({el:lerp(-1.2,-7,n)*deg,exp:lerp(5,16,n),pitch:.3,fov:.9,stars:seg(p,.25,.75),az:-.4});
   const m=lerp(B-8,B,seg(p,.15,.6));$("clk").textContent=fmt(m)+" · "+(m>=B-.01?"Bedtime · 1900 K · 80% dim":"Red");
   card.classList.toggle("lit",p>.55);
