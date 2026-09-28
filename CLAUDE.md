@@ -17,7 +17,7 @@
 A native macOS **menu bar app** that automates a science-backed evening wind-down on one
 timeline tied to local sunset and the user's bedtime: warmth (blue and green cut), dimming
 below the lowest hardware brightness, and system grayscale before bed.
-Bundle ID `app.duskmode`. Version 1.0. Website https://neerajsingh869.github.io/DuskMode/.
+Bundle ID `app.duskmode`. Version 1.0.1 (app icon added; see REGRESSIONS #24). Website https://neerajsingh869.github.io/DuskMode/.
 
 ## Rules for this project
 1. **Research before building any feature.** Cite peer-reviewed studies in
@@ -125,7 +125,7 @@ executable. Run it after touching anything in DuskModeCore. Env: macOS 15.7.3, A
 - 🟡 4 Polish: launch at login ✅, settings window ✅, CPU audit (0.0% idle) ✅,
   screen-share invisibility ✅. Open: external-monitor and full-screen live checks,
   onboarding.
-- ✅ 5 Public release: site live, repo public, v1.0.0 released (2026-09-25).
+- ✅ 5 Public release: site live, repo public, v1.0.0 released (2026-09-25); v1.0.1 (app icon) 2026-09-28.
 
 ## CURRENT STATUS / NEXT ACTION
 v1.0 is public. Open items:
