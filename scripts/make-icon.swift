@@ -39,13 +39,15 @@ func render(_ px: Int) -> Data {
     ctx.setLineWidth(4)
     ctx.strokePath()
 
-    // The logo's 24-unit viewBox mapped onto the body.
+    // The logo's 24-unit viewBox mapped onto the body. In the favicon the mark sits low
+    // (sun top 8.0 to bottom line edge 21.4, centre 14.7), so shift it up to centre it.
     let u = body.width / 24
-    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: body.minX + x * u, y: body.minY + y * u) }
+    let dy: CGFloat = 12 - (8.0 + 21.4) / 2
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: body.minX + x * u, y: body.minY + (y + dy) * u) }
 
     // Half sun: circle (12, 14.5) r 6.5, clipped to above the horizon.
     ctx.saveGState()
-    ctx.clip(to: CGRect(x: body.minX, y: body.minY, width: body.width, height: 14.5 * u))
+    ctx.clip(to: CGRect(x: body.minX, y: body.minY, width: body.width, height: p(0, 14.5).y - body.minY))
     let c = p(12, 14.5), r = 6.5 * u
     ctx.setFillColor(NSColor(srgbRed: 1, green: 0xB0 / 255, blue: 0x67 / 255, alpha: 1).cgColor)
     ctx.fillEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
