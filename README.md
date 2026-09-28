@@ -53,6 +53,7 @@ Tonight's anchors (with an 11:00 PM bedtime): Warm 8:30 PM · Dusk 9:00 PM · Gr
 
 - **Grayscale wins over warmth.** macOS applies its grayscale filter after DuskMode's warmth, so from the grayscale step onward the screen is plain gray. Only dimming keeps reducing the light from then on.
 - **Grayscale shows a macOS confirmation.** Turning grayscale on or off shows the system's "Colour Filters" notice for about a second. It can't be suppressed.
+- **If DuskMode is force-quit while the screen is gray, it stays gray.** Grayscale is a macOS setting, so it outlives the app. Warmth and dimming always reset on their own. To turn gray off, press ⌥⌘F5 and switch off Colour Filters, or go to System Settings → Accessibility → Display → Colour Filters.
 - **Grayscale uses a private macOS function** (`UAGrayscaleSetEnabled`, Apple's own Colour Filters switch). It is isolated in one file with two public fallbacks. Everything else uses public APIs.
 
 ## The science

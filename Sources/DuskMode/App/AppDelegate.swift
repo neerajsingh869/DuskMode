@@ -246,9 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScreenStateControlling
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "moon.stars.fill",
-                                   accessibilityDescription: "DuskMode")
-            button.image?.isTemplate = true   // adapts to light/dark menu bar
+            button.image = StatusBarIcon.make()   // sunset mark; lines adapt to light/dark
             // Left-click = the quick popover (nightly controls). Right-click = a
             // standard secondary menu (Settings…/About/Quit) — kept off the popover
             // since those are set-once actions, not something touched nightly.
