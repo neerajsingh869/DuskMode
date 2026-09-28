@@ -462,9 +462,27 @@
 
 ---
 
+## 24. Released app had no icon — blank placeholder in Finder, Launchpad and About (v1.0)
+- **Symptom:** v1.0 installed from the one-liner or the DMG showed macOS's generic
+  blank app icon in /Applications, Launchpad, the Gatekeeper prompt and About DuskMode.
+  Dev builds looked the same, and nobody noticed because the app only lives in the menu bar.
+- **Root cause:** `build.sh` wrote Info.plist and copied `citations.json` but never
+  shipped an `.icns` or set `CFBundleIconFile`.
+- **Fix (v1.0.1):** `scripts/make-icon.swift` draws the site logo (`site/assets/favicon.svg`)
+  on Apple's 824/1024 icon grid and writes the committed `Resources/AppIcon.icns`.
+  `build.sh` copies it and sets `CFBundleIconFile`.
+- **Invariant:** every built bundle carries `Contents/Resources/AppIcon.icns` and
+  `CFBundleIconFile = AppIcon`, and the icon matches the site logo.
+- **Guard:** `build.sh` exits non-zero when `Resources/AppIcon.icns` is missing.
+  Before any release, `NSWorkspace.icon(forFile:)` on the built app must return the logo,
+  not the placeholder.
+
+---
+
 ### Standing verification checklist (run after ANY engine/apply-path change)
 1. `swift run DuskModeSelfTest` — all green.
-2. `./build.sh release run` — single process, icon appears.
+2. `./build.sh release run` — single process, menu bar icon appears, and the app shows the
+   sunset logo in Finder (#24).
 3. Manual mode: warmth up → warm, blacks black; dim up → darkens.
 4. Auto mode: status line correct; ⌘Tab flash check (#1);
    grayscale phase → one bezel only (#4); leaving Auto reverts grayscale (#16).

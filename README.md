@@ -20,7 +20,7 @@ It downloads the latest release, moves `DuskMode.app` to `/Applications` and ope
 
 **Prefer a normal download?**
 1. Download `DuskMode.dmg` from [the latest release](https://github.com/neerajsingh869/DuskMode/releases/latest) and drag the app to Applications.
-2. Open it. macOS says it can't check the developer. Click **Done**.
+2. Open it. macOS says it could not verify the app is free of malware. That's because it isn't signed yet. Click **Done**.
 3. Open **System Settings → Privacy & Security** and click **Open Anyway**. You only do this once.
 
 **Requirements:** macOS 13 Ventura or later, Apple Silicon.
